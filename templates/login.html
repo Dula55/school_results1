@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Davis Academy Login</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .login-box {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            animation: slideUp 0.5s ease;
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        h2 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #333;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        
+        h2 span {
+            color: #667eea;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+        
+        input:focus, select:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 16px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 10px;
+            position: relative;
+        }
+        
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        #error {
+            color: #e74c3c;
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 12px;
+            background: #fde8e8;
+            border-radius: 6px;
+            font-size: 14px;
+            border-left: 4px solid #e74c3c;
+            display: none;
+        }
+        
+        #error:not(:empty) {
+            display: block;
+        }
+        
+        .info-text {
+            text-align: center;
+            margin-top: 20px;
+            color: #999;
+            font-size: 13px;
+            border-top: 1px solid #eee;
+            padding-top: 20px;
+        }
+        
+        .demo-credentials {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 13px;
+            color: #666;
+            border: 1px solid #e9ecef;
+        }
+        
+        .demo-credentials h4 {
+            color: #495057;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        
+        .demo-credentials p {
+            margin: 8px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .cred-badge {
+            background: #667eea;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            min-width: 60px;
+            text-align: center;
+        }
+        
+        .cred-value {
+            color: #2c3e50;
+            font-family: monospace;
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h2>Davis <span>Academy</span></h2>
+        
+        <div id="error"></div>
+        
+        <div class="form-group">
+            <label>Login As</label>
+            <select id="role">
+                <option value="admin">Administrator</option>
+                <option value="teacher">Teacher</option>
+                <option value="student">Student</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label>Username / ID</label>
+            <input type="text" id="username" placeholder="Enter your username or ID" 
+                   autocomplete="off" autocapitalize="none">
+        </div>
+        
+        <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="password" placeholder="Enter your password">
+        </div>
+        
+        <button onclick="login()" id="loginBtn">Sign In</button>
+        
+        <div class="info-text">
+            Davis Academy Portal v1.0
+        </div>
+    </div>
+
+    <script>
+    async function login() {
+        const role = document.getElementById("role").value;
+        const username = document.getElementById("username").value.trim();
+        const password = document.getElementById("password").value;
+        const errorDiv = document.getElementById("error");
+        const loginBtn = document.getElementById("loginBtn");
+        
+        // Clear previous error
+        errorDiv.innerHTML = "";
+        
+        // Validate inputs
+        if (!username) {
+            errorDiv.innerHTML = "Please enter your username";
+            document.getElementById("username").focus();
+            return;
+        }
+        
+        if (!password) {
+            errorDiv.innerHTML = "Please enter your password";
+            document.getElementById("password").focus();
+            return;
+        }
+        
+        // Disable button while processing
+        loginBtn.disabled = true;
+        loginBtn.innerHTML = '<span class="spinner"></span> Signing in...';
+        
+        try {
+            console.log('Attempting login for:', { role, username });
+            
+            const response = await fetch("/api/login", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                },
+                body: JSON.stringify({ 
+                    role: role, 
+                    username: username, 
+                    password: password 
+                }),
+                credentials: 'include'  // Important for session cookies
+            });
+            
+            console.log('Response status:', response.status);
+            
+            const data = await response.json();
+            console.log('Response data:', data);
+            
+            if (response.ok && data.success) {
+                console.log('Login successful, redirecting to:', data.redirect);
+                
+                // Small delay to ensure session is saved
+                setTimeout(() => {
+                    window.location.href = data.redirect;
+                }, 100);
+            } else {
+                errorDiv.innerHTML = data.error || "Login failed. Please check your credentials.";
+                resetButton();
+            }
+        } catch (err) {
+            console.error('Login error details:', err);
+            errorDiv.innerHTML = "Connection error. Please check your network and try again.";
+            resetButton();
+        }
+    }
+    
+    function resetButton() {
+        const loginBtn = document.getElementById("loginBtn");
+        loginBtn.disabled = false;
+        loginBtn.innerHTML = 'Sign In';
+    }
+
+    // Enter key login
+    document.addEventListener("keypress", function(e) {
+        if (e.key === "Enter") {
+            login();
+        }
+    });
+
+    // Clear error when user starts typing
+    document.getElementById("username").addEventListener("input", function() {
+        document.getElementById("error").innerHTML = "";
+    });
+    
+    document.getElementById("password").addEventListener("input", function() {
+        document.getElementById("error").innerHTML = "";
+    });
+    
+    // Auto-focus username field on page load
+    window.addEventListener('load', function() {
+        document.getElementById("username").focus();
+    });
+
+    // Check if already logged in
+    window.addEventListener('load', async function() {
+        try {
+            const response = await fetch('/api/check-session', {
+                method: 'GET',
+                credentials: 'include'
+            });
+            const data = await response.json();
+            if (data.logged_in) {
+                console.log('Already logged in as:', data.role);
+                // Redirect to appropriate dashboard based on role
+                if (data.role === 'admin') window.location.href = '/admin_dashboard';
+                else if (data.role === 'teacher') window.location.href = '/teacher_dashboard';
+                else if (data.role === 'student') window.location.href = '/student_dashboard';
+            }
+        } catch (err) {
+            console.log('Not logged in or server not ready');
+        }
+    });
+</script>
+</body>
+</html>

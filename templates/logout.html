@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Logout</title>
+<script>
+
+async function logout(){
+
+await fetch("/api/logout",{method:"POST"})
+window.location="/"
+
+}
+
+window.onload=logout
+
+</script>
+</head>
+
+<body>
+
+<h2>Logging out...</h2>
+
+</body>
+</html>
