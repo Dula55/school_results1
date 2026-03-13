@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Davis Academy — Teacher Dashboard</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -19,21 +19,25 @@
   --shadow-lg:0 12px 40px rgba(13,31,60,0.18);--radius:10px;--radius-lg:16px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--gray-800);min-height:100vh;font-size:15px;}
+body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--gray-800);min-height:100vh;font-size:15px;-webkit-font-smoothing:antialiased;line-height:1.35;}
 #appShell{display:flex;min-height:100vh;flex-direction:column;}
-.app-topbar{background:var(--navy);padding:0 28px;height:64px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,0.2);}
+.app-topbar{background:var(--navy);padding:0 20px;height:64px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:220;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
 .topbar-brand{display:flex;align-items:center;gap:12px;}
 .topbar-crest{width:36px;height:36px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;}
-.topbar-brand span{font-family:'Playfair Display',serif;color:white;font-size:1.1rem;}
-.topbar-right{display:flex;align-items:center;gap:16px;}
-.user-chip{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.1);border-radius:30px;padding:6px 14px 6px 6px;}
+.topbar-brand span{font-family:'Playfair Display',serif;color:white;font-size:1.05rem;}
+.topbar-right{display:flex;align-items:center;gap:12px;}
+.user-chip{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.08);border-radius:30px;padding:6px 12px 6px 6px;}
 .user-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:var(--navy);background:var(--gold);}
 .user-chip .uname{color:white;font-size:13px;font-weight:500;}
 .user-chip .urole{color:rgba(255,255,255,0.5);font-size:11px;}
-.btn-logout{background:rgba(255,255,255,0.1);border:none;color:rgba(255,255,255,0.7);padding:8px 16px;border-radius:6px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;transition:all 0.2s;}
-.btn-logout:hover{background:rgba(255,255,255,0.2);color:white;}
+.btn-logout{background:rgba(255,255,255,0.08);border:none;color:rgba(255,255,255,0.8);padding:8px 14px;border-radius:6px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;transition:all 0.18s;}
+.btn-logout:hover{background:rgba(255,255,255,0.14);color:white;}
+.hamburger{display:none;background:transparent;border:0;color:white;font-size:20px;padding:8px;border-radius:8px;cursor:pointer;}
+.hamburger:active{transform:scale(0.98);}
+
+/* Layout */
 .app-layout{display:flex;flex:1;min-height:0;}
-.sidebar{width:220px;background:white;border-right:1px solid var(--gray-200);padding:24px 0;flex-shrink:0;overflow-y:auto;position:sticky;top:64px;height:calc(100vh - 64px);}
+.sidebar{width:220px;background:white;border-right:1px solid var(--gray-200);padding:18px 0;flex-shrink:0;overflow-y:auto;position:sticky;top:64px;height:calc(100vh - 64px);transition:transform .22s ease,left .22s ease;z-index:300;}
 .sidebar-section{padding:0 16px;margin-bottom:8px;}
 .sidebar-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gray-400);padding:0 8px;margin-bottom:6px;margin-top:16px;}
 .nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:all 0.15s;color:var(--gray-600);font-size:14px;font-weight:500;border:none;background:none;width:100%;text-align:left;}
@@ -41,46 +45,50 @@ body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--gray-8
 .nav-item.active{background:var(--gold-pale);color:var(--navy);font-weight:600;}
 .nav-item.active .nav-icon{color:var(--gold);}
 .nav-icon{font-size:16px;width:20px;text-align:center;}
-.app-main{flex:1;padding:32px 36px;overflow-y:auto;}
+.app-main{flex:1;padding:32px 36px;overflow-y:auto;min-height:0;}
 .page-section{display:none;}
 .page-section.active{display:block;}
 .page-title{font-family:'Playfair Display',serif;font-size:1.7rem;color:var(--navy);margin-bottom:6px;}
 .page-subtitle{color:var(--gray-400);font-size:0.88rem;margin-bottom:28px;}
-.card{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:28px;box-shadow:var(--shadow-sm);margin-bottom:24px;}
-.card-title{font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--navy);margin-bottom:20px;display:flex;align-items:center;gap:10px;}
-.card-title::before{content:'';display:block;width:4px;height:20px;background:var(--gold);border-radius:2px;}
-.table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--gray-200);}
+.card{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:24px;box-shadow:var(--shadow-sm);margin-bottom:18px;}
+.card-title{font-family:'Playfair Display',serif;font-size:1.05rem;color:var(--navy);margin-bottom:16px;display:flex;align-items:center;gap:10px;}
+.card-title::before{content:'';display:block;width:4px;height:18px;background:var(--gold);border-radius:2px;}
+.table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--gray-200);background:var(--white);}
 table{width:100%;border-collapse:collapse;font-size:13.5px;}
-thead th{background:var(--navy);color:white;padding:12px 14px;text-align:left;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;}
+thead th{background:var(--navy);color:white;padding:10px 12px;text-align:left;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;}
 tbody tr{border-bottom:1px solid var(--gray-200);transition:background 0.1s;}
 tbody tr:last-child{border-bottom:none;}
 tbody tr:hover{background:var(--gray-100);}
-tbody td{padding:11px 14px;color:var(--gray-800);vertical-align:middle;}
+tbody td{padding:10px 12px;color:var(--gray-800);vertical-align:middle;}
 .action-cell{display:flex;gap:6px;flex-wrap:wrap;}
-.table-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px;}
+.table-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:12px;}
 .search-input{padding:9px 14px 9px 36px;border:1.5px solid var(--gray-200);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:border-color 0.2s;width:240px;}
 .search-input:focus{border-color:var(--navy-light);}
 .search-wrap{position:relative;}
 .search-wrap::before{content:'🔍';position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none;}
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(13,31,60,0.65);backdrop-filter:blur(4px);z-index:500;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.2s;}
+
+/* Modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(13,31,60,0.65);backdrop-filter:blur(4px);z-index:520;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.2s;}
 .modal-overlay.active{display:flex;}
 @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
 @keyframes slideUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
-.modal-box{background:var(--white);border-radius:var(--radius-lg);width:100%;max-width:440px;box-shadow:var(--shadow-lg);animation:slideUp 0.25s;overflow:hidden;}
-.modal-box.wide{max-width:640px;}
-.modal-header{background:var(--navy);padding:28px 30px 22px;position:relative;}
-.modal-header .crest-sm{width:42px;height:42px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:12px;}
-.modal-header h2{font-family:'Playfair Display',serif;color:var(--white);font-size:1.4rem;}
-.modal-header p{color:rgba(255,255,255,0.55);font-size:0.85rem;margin-top:4px;}
-.modal-close{position:absolute;top:18px;right:20px;background:rgba(255,255,255,0.12);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;}
+.modal-box{background:var(--white);border-radius:var(--radius-lg);width:100%;max-width:640px;box-shadow:var(--shadow-lg);animation:slideUp 0.25s;overflow:hidden;}
+.modal-box.wide{max-width:760px;}
+.modal-header{background:var(--navy);padding:26px 28px 18px;position:relative;}
+.modal-header .crest-sm{width:42px;height:42px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px;}
+.modal-header h2{font-family:'Playfair Display',serif;color:var(--white);font-size:1.35rem;margin:0;}
+.modal-header p{color:rgba(255,255,255,0.55);font-size:0.85rem;margin-top:6px;}
+.modal-close{position:absolute;top:14px;right:16px;background:rgba(255,255,255,0.12);border:none;color:white;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;}
 .modal-close:hover{background:rgba(255,255,255,0.22);}
-.modal-body{padding:28px 30px;}
-.form-group{margin-bottom:18px;}
-.form-group label{display:block;font-weight:600;font-size:0.82rem;color:var(--gray-800);margin-bottom:6px;letter-spacing:0.3px;text-transform:uppercase;}
-.form-group input,.form-group select,.form-group textarea{width:100%;padding:11px 14px;border:1.5px solid var(--gray-200);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--gray-800);background:var(--white);transition:border-color 0.2s,box-shadow 0.2s;outline:none;}
-.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--navy-light);box-shadow:0 0 0 3px rgba(42,74,128,0.1);}
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
-.btn{border:none;border-radius:8px;padding:11px 22px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:7px;}
+.modal-body{padding:22px 26px;}
+
+/* Forms/buttons */
+.form-group{margin-bottom:14px;}
+.form-group label{display:block;font-weight:700;font-size:0.82rem;color:var(--gray-800);margin-bottom:6px;letter-spacing:0.3px;text-transform:uppercase;}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:10px 12px;border:1.5px solid var(--gray-200);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--gray-800);background:var(--white);transition:border-color 0.18s,box-shadow 0.18s;outline:none;}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--navy-light);box-shadow:0 0 0 3px rgba(42,74,128,0.06);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.btn{border:none;border-radius:8px;padding:10px 18px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.18s;display:inline-flex;align-items:center;gap:8px;}
 .btn-primary{background:var(--navy);color:white;}
 .btn-primary:hover{background:var(--navy-mid);box-shadow:var(--shadow-md);}
 .btn-secondary{background:var(--gray-100);color:var(--gray-800);}
@@ -91,37 +99,87 @@ tbody td{padding:11px 14px;color:var(--gray-800);vertical-align:middle;}
 .btn-success:hover{background:#c3e6cb;}
 .btn-gold-solid{background:var(--gold);color:var(--navy);font-weight:700;}
 .btn-gold-solid:hover{background:var(--gold-light);}
-.btn-sm{padding:7px 14px;font-size:12.5px;border-radius:6px;}
-.btn-full{width:100%;justify-content:center;padding:13px;font-size:15px;}
-#toast{position:fixed;bottom:28px;right:28px;background:var(--navy);color:white;padding:14px 22px;border-radius:10px;font-size:14px;font-weight:500;box-shadow:var(--shadow-lg);transform:translateY(20px);opacity:0;transition:all 0.3s;z-index:9999;max-width:340px;display:flex;align-items:center;gap:10px;pointer-events:none;}
+.btn-sm{padding:7px 12px;font-size:12.5px;border-radius:6px;}
+.btn-full{width:100%;justify-content:center;padding:12px;font-size:15px;}
+
+/* Toast */
+#toast{position:fixed;bottom:28px;right:28px;background:var(--navy);color:white;padding:12px 18px;border-radius:10px;font-size:14px;font-weight:500;box-shadow:var(--shadow-lg);transform:translateY(20px);opacity:0;transition:all 0.3s;z-index:9999;max-width:340px;display:flex;align-items:center;gap:10px;pointer-events:none;}
 #toast.show{transform:translateY(0);opacity:1;}
 #toast.success{background:var(--green);}
 #toast.error{background:var(--red);}
+
+/* Grade color helpers */
 .g-a{color:#1a6b3a;font-weight:700;}.g-b{color:#2471a3;font-weight:700;}.g-c{color:#1a7a1a;font-weight:700;}
 .g-d{color:#d68910;font-weight:700;}.g-e{color:#cb4335;font-weight:700;}.g-f{color:#922b21;font-weight:700;}
+
+/* Mobile-specific UI */
+.sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(13,31,60,0.45);z-index:290;opacity:0;transition:opacity .18s;}
+.sidebar.open{transform:translateX(0);left:0;box-shadow:0 10px 30px rgba(10,20,40,0.2);position:fixed;top:64px;height:calc(100vh - 64px);width:260px;overflow-y:auto;}
+.sidebar{left:0;}
+/* ensure sidebar hidden by default on small screens */
+@media (max-width: 768px) {
+  .hamburger{display:inline-flex;}
+  .sidebar{display:block;transform:translateX(-110%);position:fixed;left:-100%;top:64px;height:calc(100vh - 64px);width:260px;background:white;z-index:300;padding:18px 0;transition:transform .22s ease,left .22s ease;}
+  .sidebar.open{transform:translateX(0);left:0;}
+  .sidebar-backdrop.show{display:block;opacity:1;}
+  .app-main{padding:18px 14px 78px;} /* bottom padding for mobile bottom nav */
+  .form-row{grid-template-columns:1fr;}
+  .search-input{width:160px;}
+  .card{padding:16px;}
+  .modal-box{max-width:95%;border-radius:12px;}
+  .modal-header{padding:18px 20px 14px;}
+  .modal-body{padding:16px 18px;}
+  thead th{font-size:11px;white-space:normal;}
+  tbody td{font-size:13px;padding:9px 10px;}
+  .page-title{font-size:1.35rem;}
+  .topbar-brand span{font-size:1rem;}
+  /* bottom mobile nav */
+  .mobile-bottom-nav{display:flex;position:fixed;left:10px;right:10px;bottom:10px;height:56px;background:white;border-radius:14px;align-items:center;justify-content:space-around;box-shadow:var(--shadow-lg);z-index:350;padding:6px 8px;border:1px solid var(--gray-200);}
+  .mobile-bottom-nav button{background:transparent;border:0;padding:8px 12px;border-radius:10px;font-size:13px;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--gray-600);cursor:pointer;}
+  .mobile-bottom-nav button.active{background:var(--gold-pale);color:var(--navy);font-weight:700;}
+  .mobile-bottom-nav .mb-icon{font-size:18px;}
+}
+
+/* Desktop: hide mobile nav by default */
+.mobile-bottom-nav{display:none;}
+
+/* small tweaks for super narrow screens */
+@media (max-width:420px){
+  .search-input{width:120px;}
+  .btn-logout{padding:6px 10px;font-size:12px;}
+  .user-chip .uname{display:none;}
+}
+
+/* scrollbars */
 ::-webkit-scrollbar{width:6px;height:6px;}
 ::-webkit-scrollbar-track{background:var(--gray-100);}
 ::-webkit-scrollbar-thumb{background:var(--gray-200);border-radius:3px;}
-@media(max-width:768px){.app-main{padding:20px 16px;}.form-row{grid-template-columns:1fr;}.sidebar{display:none;}}
 </style>
 </head>
 <body>
 <div id="appShell">
   <div class="app-topbar">
-    <div class="topbar-brand">
-      <div class="topbar-crest">🎓</div>
-      <span>Davis Academy</span>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <button class="hamburger" id="hambBtn" onclick="toggleSidebar()" aria-label="Open menu">☰</button>
+      <div class="topbar-brand">
+        <div class="topbar-crest">🎓</div>
+        <span>Davis Academy</span>
+      </div>
     </div>
     <div class="topbar-right">
-      <div class="user-chip">
+      <div class="user-chip" title="Account">
         <div class="user-avatar" id="topAvatar"></div>
-        <div><div class="uname" id="topName">—</div><div class="urole" id="topRole">Teacher</div></div>
+        <div style="display:flex;flex-direction:column;">
+          <div class="uname" id="topName">—</div>
+          <div class="urole" id="topRole">Teacher</div>
+        </div>
       </div>
       <button class="btn-logout" onclick="doLogout()">Sign Out</button>
     </div>
   </div>
+
   <div class="app-layout">
-    <nav class="sidebar" id="sidebarNav">
+    <nav class="sidebar" id="sidebarNav" aria-label="Primary navigation">
       <div class="sidebar-section">
         <div class="sidebar-label">Work</div>
         <button class="nav-item active" onclick="showSection('enter',this)"><span class="nav-icon">✏️</span> Enter Scores</button>
@@ -132,6 +190,10 @@ tbody td{padding:11px 14px;color:var(--gray-800);vertical-align:middle;}
         <button class="nav-item" onclick="openModal('changePwdModal')"><span class="nav-icon">🔒</span> Change Password</button>
       </div>
     </nav>
+
+    <!-- backdrop for sidebar on mobile -->
+    <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="closeSidebar()"></div>
+
     <main class="app-main" id="appMain">
       <div id="tsec-enter" class="page-section active">
         <div class="page-title">Enter Scores</div>
@@ -158,6 +220,7 @@ tbody td{padding:11px 14px;color:var(--gray-800);vertical-align:middle;}
           </div>
           <button class="btn btn-primary" onclick="loadStudentScores()">📂 Load / Create Sheet</button>
         </div>
+
         <div id="tsScoreCard" style="display:none">
           <div class="card">
             <div class="card-title" id="tsScoreTitle">Subject Scores</div>
@@ -177,6 +240,7 @@ tbody td{padding:11px 14px;color:var(--gray-800);vertical-align:middle;}
           </div>
         </div>
       </div>
+
       <div id="tsec-tresults" class="page-section">
         <div class="page-title">View Results</div>
         <div class="page-subtitle">All score entries you have submitted</div>
@@ -199,13 +263,13 @@ tbody td{padding:11px 14px;color:var(--gray-800);vertical-align:middle;}
 </div>
 
 <!-- ENTER SCORES MODAL -->
-<div id="enterScoreModal" class="modal-overlay">
-  <div class="modal-box wide">
+<div id="enterScoreModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="enterScoreTitle">
+  <div class="modal-box wide" role="document">
     <div class="modal-header">
       <div class="crest-sm">✏️</div>
-      <h2>Enter Scores</h2>
+      <h2 id="enterScoreTitle">Enter Scores</h2>
       <p id="enterScoreSubtitle">Subject scores for student</p>
-      <button class="modal-close" onclick="closeModal('enterScoreModal')">×</button>
+      <button class="modal-close" onclick="closeModal('enterScoreModal')" aria-label="Close">×</button>
     </div>
     <div class="modal-body">
       <div class="form-group"><label>Subject</label><input type="text" id="scoreSubject" placeholder="e.g. Mathematics"></div>
@@ -225,13 +289,13 @@ tbody td{padding:11px 14px;color:var(--gray-800);vertical-align:middle;}
 </div>
 
 <!-- CHANGE PASSWORD MODAL -->
-<div id="changePwdModal" class="modal-overlay">
-  <div class="modal-box">
+<div id="changePwdModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="changePwdTitle">
+  <div class="modal-box" role="document">
     <div class="modal-header">
       <div class="crest-sm">🔒</div>
-      <h2>Change Password</h2>
+      <h2 id="changePwdTitle">Change Password</h2>
       <p>Update your login password</p>
-      <button class="modal-close" onclick="closeModal('changePwdModal')">×</button>
+      <button class="modal-close" onclick="closeModal('changePwdModal')" aria-label="Close">×</button>
     </div>
     <div class="modal-body">
       <div class="form-group"><label>Current Password</label><input type="password" id="cpOld" placeholder="Current password"></div>
@@ -242,14 +306,17 @@ tbody td{padding:11px 14px;color:var(--gray-800);vertical-align:middle;}
   </div>
 </div>
 
+<!-- Mobile bottom nav -->
+<div class="mobile-bottom-nav" id="mobileBottomNav" aria-hidden="true">
+  <button onclick="showSection('enter', this)" id="mbEnterBtn"><div class="mb-icon">✏️</div><div style="font-size:11px">Enter</div></button>
+  <button onclick="showSection('tresults', this)" id="mbResultsBtn"><div class="mb-icon">📋</div><div style="font-size:11px">Results</div></button>
+  <button onclick="openModal('changePwdModal')" id="mbAcctBtn"><div class="mb-icon">🔒</div><div style="font-size:11px">Account</div></button>
+</div>
+
 <div id="toast"></div>
 
 <script>
 // FIX: Use relative /api path, NOT http://localhost:5000/api.
-// The page is served from http://127.0.0.1:5000. Fetching to http://localhost:5000
-// is a DIFFERENT origin — the session cookie (issued to 127.0.0.1) is never
-// attached by the browser, so Cookie is always None and every call returns 401.
-// A relative path is always same-origin regardless of host/IP used to open the page.
 const API_BASE = '/api';
 
 async function apiCall(endpoint, options = {}) {
@@ -278,6 +345,25 @@ let currentUser = null;
 
 document.addEventListener('DOMContentLoaded', () => { initDashboard(); });
 
+// --- Mobile sidebar helpers ---
+function toggleSidebar() {
+  const sb = document.getElementById('sidebarNav');
+  const backdrop = document.getElementById('sidebarBackdrop');
+  if (sb.classList.contains('open')) {
+    sb.classList.remove('open'); backdrop.classList.remove('show');
+  } else {
+    sb.classList.add('open'); backdrop.classList.add('show');
+  }
+}
+function closeSidebar() {
+  const sb = document.getElementById('sidebarNav');
+  const backdrop = document.getElementById('sidebarBackdrop');
+  sb.classList.remove('open'); backdrop.classList.remove('show');
+}
+// Ensure sidebar closes on navigation when on mobile
+function closeSidebarIfMobile() { if (window.innerWidth <= 768) closeSidebar(); }
+
+// --- existing dashboard logic ---
 async function initDashboard() {
     try {
         const data = await apiCall('/current-user');
@@ -289,6 +375,9 @@ async function initDashboard() {
         document.getElementById('topRole').textContent = 'Teacher';
         await loadStudentsIntoSelect();
         await renderTeacherResultsTable();
+        // show/hide mobile bottom nav depending on width
+        updateMobileNavVisibility();
+        window.addEventListener('resize', updateMobileNavVisibility);
     } catch (err) {
         console.error('Dashboard init error:', err);
         if (err.message.includes('Session expired') || err.message.includes('Not logged in')) {
@@ -297,16 +386,50 @@ async function initDashboard() {
     }
 }
 
+function updateMobileNavVisibility() {
+  const mb = document.getElementById('mobileBottomNav');
+  if (!mb) return;
+  if (window.innerWidth <= 768) {
+    mb.setAttribute('aria-hidden','false'); mb.style.display = 'flex';
+  } else {
+    mb.setAttribute('aria-hidden','true'); mb.style.display = 'none';
+    // ensure sidebar/backdrop reset
+    document.getElementById('sidebarNav').classList.remove('open');
+    document.getElementById('sidebarBackdrop').classList.remove('show');
+  }
+}
+
 function doLogout() {
     apiCall('/logout', { method: 'POST' }).finally(() => { window.location.href = '/'; });
 }
 
 function showSection(name, btn) {
     document.querySelectorAll('#appMain .page-section').forEach(s => s.classList.remove('active'));
-    document.getElementById('tsec-' + name).classList.add('active');
+    const el = document.getElementById('tsec-' + name);
+    if (el) el.classList.add('active');
     document.querySelectorAll('#sidebarNav .nav-item').forEach(b => b.classList.remove('active'));
-    if (btn) btn.classList.add('active');
+    // mark clicked sidebar or mobile button active
+    if (btn) {
+      // sidebar button will be the element itself, mobile bottom nav passes button element too
+      btn.classList.add('active');
+    } else {
+      // fallback: find corresponding sidebar btn and mark active
+      const map = { enter: 'Enter Scores', tresults: 'View Results' };
+      document.querySelectorAll('#sidebarNav .nav-item').forEach(b => {
+        if (b.textContent.trim().startsWith(map[name] || '')) b.classList.add('active');
+      });
+    }
+    // also reflect active state on mobile bottom nav
+    ['mbEnterBtn','mbResultsBtn','mbAcctBtn'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.classList.remove('active');
+    });
+    if (name === 'enter') document.getElementById('mbEnterBtn')?.classList.add('active');
+    if (name === 'tresults') document.getElementById('mbResultsBtn')?.classList.add('active');
     if (name === 'tresults') renderTeacherResultsTable();
+    // close sidebar on mobile after switching
+    closeSidebarIfMobile();
 }
 
 async function loadStudentsIntoSelect() {
@@ -412,8 +535,8 @@ async function renderTeacherResultsTable(search='') {
         const url = term ? `/teacher-results?term=${encodeURIComponent(term)}` : '/teacher-results';
         const results = await apiCall(url);
         const filtered = search ? results.filter(r =>
-            r.name.toLowerCase().includes(search.toLowerCase()) ||
-            r.student_id.toLowerCase().includes(search.toLowerCase())
+            (r.name || '').toLowerCase().includes(search.toLowerCase()) ||
+            (r.student_id || '').toLowerCase().includes(search.toLowerCase())
         ) : results;
         const tbody = document.getElementById('tResultsBody');
         if (!filtered || filtered.length === 0) {
@@ -458,6 +581,14 @@ function toast(msg, type='') {
     el._t = setTimeout(()=>el.className='',3500);
 }
 document.querySelectorAll('.modal-overlay').forEach(o => { o.addEventListener('click', e => { if(e.target===o) o.classList.remove('active'); }); });
+
+// Ensure clicks inside the sidebar do not close it
+document.getElementById('sidebarNav').addEventListener('click', (e) => { e.stopPropagation(); });
+
+// Accessibility: close mobile sidebar with ESC
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape') { closeSidebar(); document.querySelectorAll('.modal-overlay.active').forEach(m=>m.classList.remove('active')); }
+});
 </script>
 </body>
 </html>

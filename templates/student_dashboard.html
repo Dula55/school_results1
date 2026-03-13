@@ -20,7 +20,7 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--gray-800);min-height:100vh;font-size:15px;}
 #appShell{display:flex;min-height:100vh;flex-direction:column;}
-.app-topbar{background:var(--navy);padding:0 28px;height:64px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,0.2);}
+.app-topbar{background:var(--navy);padding:0 20px;height:64px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,0.2);}
 .topbar-brand{display:flex;align-items:center;gap:12px;}
 .topbar-crest{width:36px;height:36px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;}
 .topbar-brand span{font-family:'Playfair Display',serif;color:white;font-size:1.1rem;}
@@ -93,13 +93,21 @@ tbody td{padding:11px 14px;color:var(--gray-800);vertical-align:middle;}
 .g-a{color:#1a6b3a;font-weight:700;}.g-b{color:#2471a3;font-weight:700;}.g-c{color:#1a7a1a;font-weight:700;}
 .g-d{color:#d68910;font-weight:700;}.g-e{color:#cb4335;font-weight:700;}.g-f{color:#922b21;font-weight:700;}
 ::-webkit-scrollbar{width:6px;height:6px;}::-webkit-scrollbar-track{background:var(--gray-100);}::-webkit-scrollbar-thumb{background:var(--gray-200);border-radius:3px;}
-@media(max-width:768px){.app-main{padding:20px 16px;}.form-row{grid-template-columns:1fr;}.sidebar{display:none;}}
+/* MOBILE RESPONSIVE */
+@media(max-width:992px){
+  .app-main{padding:20px 16px;}
+  .form-row{grid-template-columns:1fr;}
+  .sidebar{position:fixed;top:64px;left:-260px;width:240px;height:100%;padding-top:20px;z-index:400;transition:left 0.25s;box-shadow:2px 0 12px rgba(0,0,0,0.2);}
+  .sidebar.active{left:0;}
+  .sidebar-toggle{display:flex;align-items:center;justify-content:center;width:36px;height:36px;background:var(--gold);border-radius:50%;cursor:pointer;font-size:20px;margin-right:12px;}
+}
 </style>
 </head>
 <body>
 <div id="appShell">
   <div class="app-topbar">
     <div class="topbar-brand">
+      <div class="sidebar-toggle" onclick="toggleSidebar()">☰</div>
       <div class="topbar-crest">🎓</div>
       <span>Davis Academy</span>
     </div>
@@ -168,6 +176,7 @@ tbody td{padding:11px 14px;color:var(--gray-800);vertical-align:middle;}
 <div id="toast"></div>
 
 <script>
+function toggleSidebar(){document.getElementById('sidebarNav').classList.toggle('active');}
 // FIX: Use relative /api path, NOT http://localhost:5000/api.
 // The page is served from http://127.0.0.1:5000. Fetching to http://localhost:5000
 // is a DIFFERENT origin — the session cookie (issued to 127.0.0.1) is never
