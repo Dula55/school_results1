@@ -100,17 +100,38 @@ def generate_random_password():
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
 # Critical: Session configuration MUST be set before initializing Session
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+
+# On Render, SECRET_KEY MUST be set as an environment variable.
+# Without a stable key, every new deploy gets a different key → all existing
+# sessions are immediately invalidated and every user is logged out.
+# Set it in: Render dashboard → your service → Environment → Add env var.
+_secret = os.environ.get('SECRET_KEY')
+if not _secret:
+    if os.environ.get('RENDER'):
+        raise RuntimeError(
+            "SECRET_KEY environment variable is not set. "
+            "Add it in Render dashboard → Environment → Add Environment Variable. "
+            "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+    _secret = 'dev-secret-key-change-in-production'
+app.config['SECRET_KEY'] = _secret
+
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_PERMANENT'] = True
 app.config['SESSION_USE_SIGNER'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SECURE'] = False  # Set to True only in production with HTTPS
+# Render serves over HTTPS — secure cookies are required there.
+app.config['SESSION_COOKIE_SECURE'] = bool(os.environ.get('RENDER'))
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_NAME'] = 'school_session'
 app.config['SESSION_REFRESH_EACH_REQUEST'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
-app.config['SESSION_FILE_DIR'] = os.path.join(BASE_DIR, 'flask_session')
+# On Render the app directory is read-only; /tmp is the only writable space.
+# This mirrors the same pattern already used for DB_PATH above.
+if os.environ.get('RENDER'):
+    app.config['SESSION_FILE_DIR'] = '/tmp/flask_session'
+else:
+    app.config['SESSION_FILE_DIR'] = os.path.join(BASE_DIR, 'flask_session')
 app.config['SESSION_COOKIE_PATH'] = '/'
 app.config['SESSION_COOKIE_DOMAIN'] = None
 
