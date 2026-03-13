@@ -677,8 +677,13 @@
 <div id="toast"></div>
 
 <script>
-/* API CONFIGURATION */
-const API_BASE = 'http://localhost:5000/api';
+// FIX: Use a relative path instead of an absolute hardcoded URL.
+// The original code used 'http://localhost:5000/api', but the page is served
+// from http://127.0.0.1:5000. The browser treats these as different origins,
+// so it never sent the session cookie — causing Cookie=None on every
+// /api/current-user request and triggering an infinite 401 → /login loop.
+// A relative path is always same-origin, so the cookie is always included.
+const API_BASE = '/api';
 
 async function apiCall(endpoint, options = {}) {
     const url = `${API_BASE}${endpoint}`;
@@ -688,18 +693,28 @@ async function apiCall(endpoint, options = {}) {
             'Content-Type': 'application/json',
         }
     };
-    
+
+    // Merge headers carefully so callers can add headers without stomping defaults
+    const mergedOptions = {
+        ...defaultOptions,
+        ...options,
+        headers: {
+            ...defaultOptions.headers,
+            ...(options.headers || {}),
+        },
+    };
+
     try {
-        const response = await fetch(url, { ...defaultOptions, ...options });
-        
-        // Handle 401 Unauthorized
+        const response = await fetch(url, mergedOptions);
+
+        // Handle 401 Unauthorized — session expired or not logged in
         if (response.status === 401) {
             console.log('Session expired, redirecting to login');
-            window.location.href = '/login';
+            window.location.href = '/';
             throw new Error('Session expired');
         }
 
-        // For empty responses (like 204)
+        // For empty responses (like 204 No Content)
         if (response.status === 204) {
             return null;
         }
@@ -708,7 +723,7 @@ async function apiCall(endpoint, options = {}) {
         if (!response.ok) {
             throw new Error(data.error || 'API call failed');
         }
-        
+
         return data;
     } catch (error) {
         console.error('API call error:', error);
@@ -728,7 +743,7 @@ async function initDashboard() {
         const data = await apiCall('/current-user');
 
         if (!data || !data.user) {
-            window.location.href = '/login';
+            window.location.href = '/';
             return;
         }
 
@@ -736,7 +751,7 @@ async function initDashboard() {
 
         // Verify admin role
         if (!currentUser.role || currentUser.role.toLowerCase() !== 'admin') {
-            window.location.href = '/login';
+            window.location.href = '/';
             return;
         }
 
@@ -750,18 +765,17 @@ async function initDashboard() {
 
     } catch (err) {
         console.error('Dashboard init error:', err);
-        window.location.href = '/login';
+        // Only redirect if it's not already a redirect (avoid double redirect)
+        if (!err.message.includes('Session expired')) {
+            window.location.href = '/';
+        }
     }
 }
 
 function doLogout() {
     apiCall('/logout', { method: 'POST' })
-        .then(() => {
-            window.location.href = '/login';
-        })
-        .catch(() => {
-            window.location.href = '/login';
-        });
+        .then(() => { window.location.href = '/'; })
+        .catch(() => { window.location.href = '/'; });
 }
 
 /* SECTION MANAGEMENT */
@@ -805,7 +819,7 @@ async function loadStudents() {
 
 function renderStudentsTable(students) {
     const tbody = document.getElementById('studentsTableBody');
-    
+
     if (!students || students.length === 0) {
         tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--gray-400);">No students found</td></tr>';
         return;
@@ -836,7 +850,7 @@ function filterStudents() {
         return;
     }
 
-    const filtered = allStudents.filter(s => 
+    const filtered = allStudents.filter(s =>
         (s.name && s.name.toLowerCase().includes(search)) ||
         (s.student_id && s.student_id.toLowerCase().includes(search)) ||
         (s.username && s.username.toLowerCase().includes(search))
@@ -866,26 +880,18 @@ async function addStudent() {
     try {
         const result = await apiCall('/students/manage', {
             method: 'POST',
-            body: JSON.stringify({
-                name,
-                student_id: studentId,
-                level,
-                arm,
-                phone,
-                username
-            })
+            body: JSON.stringify({ name, student_id: studentId, level, arm, phone, username })
         });
 
         if (result.success) {
             document.getElementById('generatedPassword').textContent = result.password;
             document.getElementById('studentPasswordDisplay').style.display = 'block';
             document.getElementById('addStudentForm').style.display = 'none';
-            
+
             toast('Student enrolled successfully!', 'success');
-            loadStudents(); // Refresh the list
-            loadDashboardStats(); // Update stats
-            
-            // Reset form after 5 seconds
+            loadStudents();
+            loadDashboardStats();
+
             setTimeout(() => {
                 document.getElementById('addStudentForm').reset();
                 document.getElementById('addStudentForm').style.display = 'block';
@@ -899,18 +905,13 @@ async function addStudent() {
 }
 
 async function deleteStudent(studentId) {
-    if (!confirm(`Are you sure you want to delete student ${studentId}? This will also delete all their scores.`)) {
-        return;
-    }
+    if (!confirm(`Are you sure you want to delete student ${studentId}? This will also delete all their scores.`)) return;
 
     try {
-        await apiCall(`/students/manage/${studentId}`, {
-            method: 'DELETE'
-        });
-
+        await apiCall(`/students/manage/${studentId}`, { method: 'DELETE' });
         toast('Student deleted successfully', 'success');
-        loadStudents(); // Refresh the list
-        loadDashboardStats(); // Update stats
+        loadStudents();
+        loadDashboardStats();
     } catch (error) {
         toast(error.message || 'Failed to delete student', 'error');
     }
@@ -919,13 +920,12 @@ async function deleteStudent(studentId) {
 async function viewStudentScores(studentId) {
     try {
         const scores = await apiCall(`/scores/manage?student_id=${studentId}`);
-        
+
         document.getElementById('viewScoresSubtitle').textContent = `Student ID: ${studentId}`;
-        
+
         if (!scores || scores.length === 0) {
             document.getElementById('viewScoresContent').innerHTML = '<p style="text-align:center;color:var(--gray-400);">No scores found for this student</p>';
         } else {
-            // Group scores by term and session
             const grouped = {};
             scores.forEach(s => {
                 const key = `${s.term} - ${s.session}`;
@@ -937,7 +937,6 @@ async function viewStudentScores(studentId) {
             for (const [key, groupScores] of Object.entries(grouped)) {
                 html += `<h3 style="margin:20px 0 10px;color:var(--navy);">${key}</h3>`;
                 html += '<div class="table-wrap"><table><thead><tr><th>Subject</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Exam</th><th>Total</th><th>Grade</th></tr></thead><tbody>';
-                
                 groupScores.forEach(s => {
                     html += `<tr>
                         <td>${s.subject}</td>
@@ -946,16 +945,14 @@ async function viewStudentScores(studentId) {
                         <td>${s.ca3}</td>
                         <td>${s.exam}</td>
                         <td><strong>${s.total}</strong></td>
-                        <td class="${gradeClass(s.grade)}">${s.grade}</td>
+                        <td>${s.grade}</td>
                     </tr>`;
                 });
-                
                 html += '</tbody></table></div>';
             }
-            
             document.getElementById('viewScoresContent').innerHTML = html;
         }
-        
+
         openModal('viewScoresModal');
     } catch (error) {
         toast('Failed to load scores', 'error');
@@ -977,7 +974,7 @@ async function loadTeachers() {
 
 function renderTeachersTable(teachers) {
     const tbody = document.getElementById('teachersTableBody');
-    
+
     if (!teachers || teachers.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--gray-400);">No teachers found</td></tr>';
         return;
@@ -1006,7 +1003,7 @@ function filterTeachers() {
         return;
     }
 
-    const filtered = allTeachers.filter(t => 
+    const filtered = allTeachers.filter(t =>
         (t.name && t.name.toLowerCase().includes(search)) ||
         (t.email && t.email.toLowerCase().includes(search)) ||
         (t.subject && t.subject.toLowerCase().includes(search))
@@ -1041,12 +1038,11 @@ async function addTeacher() {
             document.getElementById('generatedTeacherPassword').textContent = result.password;
             document.getElementById('teacherPasswordDisplay').style.display = 'block';
             document.getElementById('addTeacherForm').style.display = 'none';
-            
+
             toast('Teacher added successfully!', 'success');
-            loadTeachers(); // Refresh the list
-            loadDashboardStats(); // Update stats
-            
-            // Reset form after 5 seconds
+            loadTeachers();
+            loadDashboardStats();
+
             setTimeout(() => {
                 document.getElementById('addTeacherForm').reset();
                 document.getElementById('addTeacherForm').style.display = 'block';
@@ -1060,18 +1056,13 @@ async function addTeacher() {
 }
 
 async function deleteTeacher(username) {
-    if (!confirm(`Are you sure you want to delete teacher ${username}?`)) {
-        return;
-    }
+    if (!confirm(`Are you sure you want to delete teacher ${username}?`)) return;
 
     try {
-        await apiCall(`/teachers/${username}`, {
-            method: 'DELETE'
-        });
-
+        await apiCall(`/teachers/${username}`, { method: 'DELETE' });
         toast('Teacher deleted successfully', 'success');
-        loadTeachers(); // Refresh the list
-        loadDashboardStats(); // Update stats
+        loadTeachers();
+        loadDashboardStats();
     } catch (error) {
         toast(error.message || 'Failed to delete teacher', 'error');
     }
@@ -1092,7 +1083,7 @@ async function loadScores() {
 
 function renderScoresTable(scores) {
     const tbody = document.getElementById('scoresTableBody');
-    
+
     if (!scores || scores.length === 0) {
         tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--gray-400);">No scores found</td></tr>';
         return;
@@ -1107,7 +1098,7 @@ function renderScoresTable(scores) {
             <td>${s.ca1 || 0} | ${s.ca2 || 0} | ${s.ca3 || 0}</td>
             <td>${s.exam || 0}</td>
             <td><strong>${s.total || 0}</strong></td>
-            <td class="${gradeClass(s.grade)}">${s.grade || 'N/A'}</td>
+            <td>${s.grade || 'N/A'}</td>
             <td>
                 <div class="action-cell">
                     <button class="btn btn-sm btn-danger" onclick="deleteScore('${s.student_id}','${s.subject}','${s.term}','${s.session}')">🗑 Delete</button>
@@ -1124,7 +1115,7 @@ function filterScores() {
         return;
     }
 
-    const filtered = allScores.filter(s => 
+    const filtered = allScores.filter(s =>
         s.student_id && s.student_id.toLowerCase().includes(search)
     );
     renderScoresTable(filtered);
@@ -1145,8 +1136,7 @@ async function addScore() {
     const ca3 = parseFloat(document.getElementById('scoreCA3').value) || 0;
     const exam = parseFloat(document.getElementById('scoreExam').value) || 0;
     const total = ca1 + ca2 + ca3 + exam;
-    
-    // Calculate grade
+
     let grade = 'F';
     if (total >= 70) grade = 'A';
     else if (total >= 60) grade = 'B';
@@ -1158,12 +1148,10 @@ async function addScore() {
         toast('Please fill all required fields', 'error');
         return;
     }
-
     if (ca1 > 10 || ca2 > 10 || ca3 > 10) {
         toast('CA scores must be between 0 and 10', 'error');
         return;
     }
-
     if (exam > 70) {
         toast('Exam score must be between 0 and 70', 'error');
         return;
@@ -1172,69 +1160,38 @@ async function addScore() {
     try {
         await apiCall('/scores/manage', {
             method: 'POST',
-            body: JSON.stringify({
-                student_id: studentId,
-                term,
-                session,
-                subject,
-                ca1, ca2, ca3, exam,
-                total,
-                grade
-            })
+            body: JSON.stringify({ student_id: studentId, term, session, subject, ca1, ca2, ca3, exam, total, grade })
         });
 
         toast('Score added successfully!', 'success');
         closeModal('addScoreModal');
-        loadScores(); // Refresh the list
-        loadDashboardStats(); // Update stats
+        loadScores();
+        loadDashboardStats();
     } catch (error) {
         toast(error.message || 'Failed to add score', 'error');
     }
 }
 
 async function deleteScore(studentId, subject, term, session) {
-    if (!confirm(`Delete score for ${studentId} - ${subject}?`)) {
-        return;
-    }
+    if (!confirm(`Delete score for ${studentId} - ${subject}?`)) return;
 
     try {
         await apiCall('/scores/delete', {
             method: 'POST',
-            body: JSON.stringify({
-                student_id: studentId,
-                subject,
-                term,
-                session
-            })
+            body: JSON.stringify({ student_id: studentId, subject, term, session })
         });
 
         toast('Score deleted successfully', 'success');
-        loadScores(); // Refresh the list
-        loadDashboardStats(); // Update stats
+        loadScores();
+        loadDashboardStats();
     } catch (error) {
         toast(error.message || 'Failed to delete score', 'error');
     }
 }
 
-/* HELPER FUNCTIONS */
-function gradeClass(g) {
-    if (!g) return '';
-    if (g === 'A') return 'g-a';
-    if (g === 'B') return 'g-b';
-    if (g === 'C') return 'g-c';
-    if (g === 'D') return 'g-d';
-    if (g === 'E') return 'g-e';
-    if (g === 'F') return 'g-f';
-    return '';
-}
-
-function openModal(id) {
-    document.getElementById(id).classList.add('active');
-}
-
-function closeModal(id) {
-    document.getElementById(id).classList.remove('active');
-}
+/* HELPERS */
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
 function toast(msg, type = '') {
     const el = document.getElementById('toast');
@@ -1250,20 +1207,9 @@ async function doChangePwd() {
     const nw = document.getElementById('cpNew').value;
     const conf = document.getElementById('cpConfirm').value;
 
-    if (!old || !nw || !conf) { 
-        toast('Fill all fields', 'error'); 
-        return; 
-    }
-    
-    if (nw !== conf) { 
-        toast('New passwords do not match', 'error'); 
-        return; 
-    }
-    
-    if (nw.length < 6) { 
-        toast('Password must be at least 6 characters', 'error'); 
-        return; 
-    }
+    if (!old || !nw || !conf) { toast('Fill all fields', 'error'); return; }
+    if (nw !== conf) { toast('New passwords do not match', 'error'); return; }
+    if (nw.length < 6) { toast('Password must be at least 6 characters', 'error'); return; }
 
     try {
         await apiCall('/change-password', {

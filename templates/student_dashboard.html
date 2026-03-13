@@ -9,277 +9,94 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 :root {
-  --navy: #0d1f3c;
-  --navy-mid: #1a3460;
-  --navy-light: #2a4a80;
-  --gold: #c8952e;
-  --gold-light: #e6b84a;
-  --gold-pale: #f9f0db;
-  --cream: #fdf8f2;
-  --white: #ffffff;
-  --gray-100: #f4f5f7;
-  --gray-200: #e8eaed;
-  --gray-400: #9aa0aa;
-  --gray-600: #5c6370;
-  --gray-800: #2d3340;
-  --red: #c0392b;
-  --green: #1a6b3a;
-  --green-light: #e8f5ee;
-  --red-light: #fdecea;
-  --shadow-sm: 0 1px 3px rgba(13,31,60,0.08);
-  --shadow-md: 0 4px 16px rgba(13,31,60,0.12);
-  --shadow-lg: 0 12px 40px rgba(13,31,60,0.18);
-  --radius: 10px;
-  --radius-lg: 16px;
+  --navy:#0d1f3c;--navy-mid:#1a3460;--navy-light:#2a4a80;
+  --gold:#c8952e;--gold-light:#e6b84a;--gold-pale:#f9f0db;
+  --cream:#fdf8f2;--white:#ffffff;
+  --gray-100:#f4f5f7;--gray-200:#e8eaed;--gray-400:#9aa0aa;--gray-600:#5c6370;--gray-800:#2d3340;
+  --red:#c0392b;--green:#1a6b3a;--green-light:#e8f5ee;--red-light:#fdecea;
+  --shadow-sm:0 1px 3px rgba(13,31,60,0.08);--shadow-md:0 4px 16px rgba(13,31,60,0.12);
+  --shadow-lg:0 12px 40px rgba(13,31,60,0.18);--radius:10px;--radius-lg:16px;
 }
-
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
-  font-family: 'DM Sans', sans-serif;
-  background: var(--cream);
-  color: var(--gray-800);
-  min-height: 100vh;
-  font-size: 15px;
-}
-
-/* APP SHELL */
-#appShell { display: flex; min-height: 100vh; flex-direction: column; }
-
-.app-topbar {
-  background: var(--navy);
-  padding: 0 28px;
-  height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  position: sticky;
-  top: 0;
-  z-index: 200;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-}
-
-.topbar-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.topbar-crest { width: 36px; height: 36px; background: var(--gold); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; }
-.topbar-brand span { font-family: 'Playfair Display', serif; color: white; font-size: 1.1rem; }
-
-.topbar-right { display: flex; align-items: center; gap: 16px; }
-.user-chip {
-  display: flex; align-items: center; gap: 10px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 30px;
-  padding: 6px 14px 6px 6px;
-}
-.user-avatar {
-  width: 32px; height: 32px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 700; font-size: 14px; color: var(--navy);
-}
-.user-chip .uname { color: white; font-size: 13px; font-weight: 500; }
-.user-chip .urole { color: rgba(255,255,255,0.5); font-size: 11px; }
-
-.btn-logout { background: rgba(255,255,255,0.1); border: none; color: rgba(255,255,255,0.7); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-family: 'DM Sans',sans-serif; font-size: 13px; font-weight: 500; transition: all 0.2s; }
-.btn-logout:hover { background: rgba(255,255,255,0.2); color: white; }
-
-.app-layout { display: flex; flex: 1; min-height: 0; }
-
-.sidebar {
-  width: 220px;
-  background: white;
-  border-right: 1px solid var(--gray-200);
-  padding: 24px 0;
-  flex-shrink: 0;
-  overflow-y: auto;
-  position: sticky;
-  top: 64px;
-  height: calc(100vh - 64px);
-}
-
-.sidebar-section { padding: 0 16px; margin-bottom: 8px; }
-.sidebar-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--gray-400); padding: 0 8px; margin-bottom: 6px; margin-top: 16px; }
-
-.nav-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.15s;
-  color: var(--gray-600);
-  font-size: 14px;
-  font-weight: 500;
-  border: none;
-  background: none;
-  width: 100%;
-  text-align: left;
-}
-.nav-item:hover { background: var(--gray-100); color: var(--navy); }
-.nav-item.active { background: var(--gold-pale); color: var(--navy); font-weight: 600; }
-.nav-item.active .nav-icon { color: var(--gold); }
-.nav-icon { font-size: 16px; width: 20px; text-align: center; }
-
-.app-main { flex: 1; padding: 32px 36px; overflow-y: auto; }
-
-.page-section { display: none; }
-.page-section.active { display: block; }
-
-.page-title { font-family: 'Playfair Display', serif; font-size: 1.7rem; color: var(--navy); margin-bottom: 6px; }
-.page-subtitle { color: var(--gray-400); font-size: 0.88rem; margin-bottom: 28px; }
-
-/* CARD */
-.card { background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius-lg); padding: 28px; box-shadow: var(--shadow-sm); margin-bottom: 24px; }
-.card-title { font-family: 'Playfair Display', serif; font-size: 1.1rem; color: var(--navy); margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
-.card-title::before { content: ''; display: block; width: 4px; height: 20px; background: var(--gold); border-radius: 2px; }
-
-/* TABLE */
-.table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--gray-200); }
-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-thead th { background: var(--navy); color: white; padding: 12px 14px; text-align: left; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
-tbody tr { border-bottom: 1px solid var(--gray-200); transition: background 0.1s; }
-tbody tr:last-child { border-bottom: none; }
-tbody tr:hover { background: var(--gray-100); }
-tbody td { padding: 11px 14px; color: var(--gray-800); vertical-align: middle; }
-
-/* FORMS */
-.form-group { margin-bottom: 18px; }
-.form-group label { display: block; font-weight: 600; font-size: 0.82rem; color: var(--gray-800); margin-bottom: 6px; letter-spacing: 0.3px; text-transform: uppercase; }
-.form-group input, .form-group select {
-  width: 100%; padding: 11px 14px;
-  border: 1.5px solid var(--gray-200);
-  border-radius: 8px;
-  font-family: 'DM Sans', sans-serif;
-  font-size: 14px;
-  color: var(--gray-800);
-  background: var(--white);
-  transition: border-color 0.2s, box-shadow 0.2s;
-  outline: none;
-}
-.form-group input:focus, .form-group select:focus {
-  border-color: var(--navy-light);
-  box-shadow: 0 0 0 3px rgba(42,74,128,0.1);
-}
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-
-.btn { border: none; border-radius: 8px; padding: 11px 22px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 7px; }
-.btn-primary { background: var(--navy); color: white; }
-.btn-primary:hover { background: var(--navy-mid); box-shadow: var(--shadow-md); }
-.btn-gold-solid { background: var(--gold); color: var(--navy); font-weight: 700; }
-.btn-gold-solid:hover { background: var(--gold-light); }
-.btn-full { width: 100%; justify-content: center; padding: 13px; font-size: 15px; }
-
-/* RESULT SHEET PREVIEW */
-.result-sheet-preview {
-  background: white;
-  border: 1px solid var(--gray-200);
-  border-radius: 12px;
-  padding: 36px;
-  font-family: 'DM Sans', sans-serif;
-}
-.rs-school-header { text-align: center; border-bottom: 3px double var(--navy); padding-bottom: 18px; margin-bottom: 22px; }
-.rs-school-name { font-family: 'Playfair Display', serif; font-size: 1.5rem; color: var(--navy); font-weight: 700; }
-.rs-school-sub { color: var(--gray-600); font-size: 0.88rem; margin-top: 4px; }
-.rs-title { font-family: 'Playfair Display', serif; font-size: 1.1rem; color: var(--gold); margin-top: 8px; font-style: italic; }
-.rs-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 22px; }
-.rs-meta-item { padding: 10px 14px; background: var(--gray-100); border-radius: 6px; font-size: 13px; }
-.rs-meta-item strong { color: var(--navy); display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 2px; }
-
-/* MODAL */
-.modal-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(13,31,60,0.65);
-  backdrop-filter: blur(4px);
-  z-index: 500;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  animation: fadeIn 0.2s;
-}
-.modal-overlay.active { display: flex; }
-
-@keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
-@keyframes slideUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
-
-.modal-box {
-  background: var(--white);
-  border-radius: var(--radius-lg);
-  width: 100%;
-  max-width: 440px;
-  box-shadow: var(--shadow-lg);
-  animation: slideUp 0.25s;
-  overflow: hidden;
-}
-
-.modal-header {
-  background: var(--navy);
-  padding: 28px 30px 22px;
-  position: relative;
-}
-.modal-header .crest-sm {
-  width: 42px; height: 42px; background: var(--gold);
-  border-radius: 50%; display: flex; align-items: center;
-  justify-content: center; font-size: 18px; margin-bottom: 12px;
-}
-.modal-header h2 { font-family:'Playfair Display',serif; color:var(--white); font-size:1.4rem; }
-.modal-header p { color:rgba(255,255,255,0.55); font-size:0.85rem; margin-top:4px; }
-
-.modal-close {
-  position: absolute;
-  top: 18px; right: 20px;
-  background: rgba(255,255,255,0.12);
-  border: none; color: white; width: 32px; height: 32px;
-  border-radius: 50%; cursor: pointer; font-size: 18px;
-  display: flex; align-items: center; justify-content: center;
-  transition: background 0.2s;
-}
-.modal-close:hover { background: rgba(255,255,255,0.22); }
-
-.modal-body { padding: 28px 30px; }
-
-/* TOAST */
-#toast {
-  position: fixed; bottom: 28px; right: 28px;
-  background: var(--navy); color: white;
-  padding: 14px 22px; border-radius: 10px;
-  font-size: 14px; font-weight: 500;
-  box-shadow: var(--shadow-lg);
-  transform: translateY(20px); opacity: 0;
-  transition: all 0.3s;
-  z-index: 9999; max-width: 340px;
-  display: flex; align-items: center; gap: 10px;
-  pointer-events: none;
-}
-#toast.show { transform: translateY(0); opacity: 1; }
-#toast.success { background: var(--green); }
-#toast.error { background: var(--red); }
-
-/* RESULT GRADE COLOURS */
-.g-a { color: #1a6b3a; font-weight: 700; }
-.g-b { color: #2471a3; font-weight: 700; }
-.g-c { color: #1a7a1a; font-weight: 700; }
-.g-d { color: #d68910; font-weight: 700; }
-.g-e { color: #cb4335; font-weight: 700; }
-.g-f { color: #922b21; font-weight: 700; }
-
-/* SCROLLBAR */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--gray-100); }
-::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 3px; }
-
-@media(max-width:768px){
-  .app-main { padding: 20px 16px; }
-  .form-row { grid-template-columns: 1fr; }
-  .sidebar { display: none; }
-}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--gray-800);min-height:100vh;font-size:15px;}
+#appShell{display:flex;min-height:100vh;flex-direction:column;}
+.app-topbar{background:var(--navy);padding:0 28px;height:64px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,0.2);}
+.topbar-brand{display:flex;align-items:center;gap:12px;}
+.topbar-crest{width:36px;height:36px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;}
+.topbar-brand span{font-family:'Playfair Display',serif;color:white;font-size:1.1rem;}
+.topbar-right{display:flex;align-items:center;gap:16px;}
+.user-chip{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.1);border-radius:30px;padding:6px 14px 6px 6px;}
+.user-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:var(--navy);}
+.user-chip .uname{color:white;font-size:13px;font-weight:500;}
+.user-chip .urole{color:rgba(255,255,255,0.5);font-size:11px;}
+.btn-logout{background:rgba(255,255,255,0.1);border:none;color:rgba(255,255,255,0.7);padding:8px 16px;border-radius:6px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;transition:all 0.2s;}
+.btn-logout:hover{background:rgba(255,255,255,0.2);color:white;}
+.app-layout{display:flex;flex:1;min-height:0;}
+.sidebar{width:220px;background:white;border-right:1px solid var(--gray-200);padding:24px 0;flex-shrink:0;overflow-y:auto;position:sticky;top:64px;height:calc(100vh - 64px);}
+.sidebar-section{padding:0 16px;margin-bottom:8px;}
+.sidebar-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gray-400);padding:0 8px;margin-bottom:6px;margin-top:16px;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:all 0.15s;color:var(--gray-600);font-size:14px;font-weight:500;border:none;background:none;width:100%;text-align:left;}
+.nav-item:hover{background:var(--gray-100);color:var(--navy);}
+.nav-item.active{background:var(--gold-pale);color:var(--navy);font-weight:600;}
+.nav-item.active .nav-icon{color:var(--gold);}
+.nav-icon{font-size:16px;width:20px;text-align:center;}
+.app-main{flex:1;padding:32px 36px;overflow-y:auto;}
+.page-section{display:none;}
+.page-section.active{display:block;}
+.page-title{font-family:'Playfair Display',serif;font-size:1.7rem;color:var(--navy);margin-bottom:6px;}
+.page-subtitle{color:var(--gray-400);font-size:0.88rem;margin-bottom:28px;}
+.card{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:28px;box-shadow:var(--shadow-sm);margin-bottom:24px;}
+.card-title{font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--navy);margin-bottom:20px;display:flex;align-items:center;gap:10px;}
+.card-title::before{content:'';display:block;width:4px;height:20px;background:var(--gold);border-radius:2px;}
+.table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--gray-200);}
+table{width:100%;border-collapse:collapse;font-size:13.5px;}
+thead th{background:var(--navy);color:white;padding:12px 14px;text-align:left;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;}
+tbody tr{border-bottom:1px solid var(--gray-200);transition:background 0.1s;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:var(--gray-100);}
+tbody td{padding:11px 14px;color:var(--gray-800);vertical-align:middle;}
+.form-group{margin-bottom:18px;}
+.form-group label{display:block;font-weight:600;font-size:0.82rem;color:var(--gray-800);margin-bottom:6px;letter-spacing:0.3px;text-transform:uppercase;}
+.form-group input,.form-group select{width:100%;padding:11px 14px;border:1.5px solid var(--gray-200);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--gray-800);background:var(--white);transition:border-color 0.2s,box-shadow 0.2s;outline:none;}
+.form-group input:focus,.form-group select:focus{border-color:var(--navy-light);box-shadow:0 0 0 3px rgba(42,74,128,0.1);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.btn{border:none;border-radius:8px;padding:11px 22px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:7px;}
+.btn-primary{background:var(--navy);color:white;}
+.btn-primary:hover{background:var(--navy-mid);box-shadow:var(--shadow-md);}
+.btn-gold-solid{background:var(--gold);color:var(--navy);font-weight:700;}
+.btn-gold-solid:hover{background:var(--gold-light);}
+.btn-full{width:100%;justify-content:center;padding:13px;font-size:15px;}
+.result-sheet-preview{background:white;border:1px solid var(--gray-200);border-radius:12px;padding:36px;font-family:'DM Sans',sans-serif;}
+.rs-school-header{text-align:center;border-bottom:3px double var(--navy);padding-bottom:18px;margin-bottom:22px;}
+.rs-school-name{font-family:'Playfair Display',serif;font-size:1.5rem;color:var(--navy);font-weight:700;}
+.rs-school-sub{color:var(--gray-600);font-size:0.88rem;margin-top:4px;}
+.rs-title{font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--gold);margin-top:8px;font-style:italic;}
+.rs-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:22px;}
+.rs-meta-item{padding:10px 14px;background:var(--gray-100);border-radius:6px;font-size:13px;}
+.rs-meta-item strong{color:var(--navy);display:block;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:2px;}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(13,31,60,0.65);backdrop-filter:blur(4px);z-index:500;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.2s;}
+.modal-overlay.active{display:flex;}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+@keyframes slideUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+.modal-box{background:var(--white);border-radius:var(--radius-lg);width:100%;max-width:440px;box-shadow:var(--shadow-lg);animation:slideUp 0.25s;overflow:hidden;}
+.modal-header{background:var(--navy);padding:28px 30px 22px;position:relative;}
+.modal-header .crest-sm{width:42px;height:42px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:12px;}
+.modal-header h2{font-family:'Playfair Display',serif;color:var(--white);font-size:1.4rem;}
+.modal-header p{color:rgba(255,255,255,0.55);font-size:0.85rem;margin-top:4px;}
+.modal-close{position:absolute;top:18px;right:20px;background:rgba(255,255,255,0.12);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;}
+.modal-close:hover{background:rgba(255,255,255,0.22);}
+.modal-body{padding:28px 30px;}
+#toast{position:fixed;bottom:28px;right:28px;background:var(--navy);color:white;padding:14px 22px;border-radius:10px;font-size:14px;font-weight:500;box-shadow:var(--shadow-lg);transform:translateY(20px);opacity:0;transition:all 0.3s;z-index:9999;max-width:340px;display:flex;align-items:center;gap:10px;pointer-events:none;}
+#toast.show{transform:translateY(0);opacity:1;}
+#toast.success{background:var(--green);}
+#toast.error{background:var(--red);}
+.g-a{color:#1a6b3a;font-weight:700;}.g-b{color:#2471a3;font-weight:700;}.g-c{color:#1a7a1a;font-weight:700;}
+.g-d{color:#d68910;font-weight:700;}.g-e{color:#cb4335;font-weight:700;}.g-f{color:#922b21;font-weight:700;}
+::-webkit-scrollbar{width:6px;height:6px;}::-webkit-scrollbar-track{background:var(--gray-100);}::-webkit-scrollbar-thumb{background:var(--gray-200);border-radius:3px;}
+@media(max-width:768px){.app-main{padding:20px 16px;}.form-row{grid-template-columns:1fr;}.sidebar{display:none;}}
 </style>
 </head>
 <body>
-
-<!-- APP SHELL -->
 <div id="appShell">
   <div class="app-topbar">
     <div class="topbar-brand">
@@ -289,17 +106,12 @@ tbody td { padding: 11px 14px; color: var(--gray-800); vertical-align: middle; }
     <div class="topbar-right">
       <div class="user-chip">
         <div class="user-avatar" id="topAvatar" style="background:var(--gold);"></div>
-        <div>
-          <div class="uname" id="topName">—</div>
-          <div class="urole" id="topRole">Student</div>
-        </div>
+        <div><div class="uname" id="topName">—</div><div class="urole" id="topRole">Student</div></div>
       </div>
       <button class="btn-logout" onclick="doLogout()">Sign Out</button>
     </div>
   </div>
-
   <div class="app-layout">
-    <!-- SIDEBAR -->
     <nav class="sidebar" id="sidebarNav">
       <div class="sidebar-section">
         <div class="sidebar-label">Academics</div>
@@ -310,8 +122,6 @@ tbody td { padding: 11px 14px; color: var(--gray-800); vertical-align: middle; }
         <button class="nav-item" onclick="openModal('changePwdModal')"><span class="nav-icon">🔒</span> Change Password</button>
       </div>
     </nav>
-
-    <!-- MAIN -->
     <main class="app-main" id="appMain">
       <div id="ssec-results" class="page-section active">
         <div class="page-title">My Results</div>
@@ -338,7 +148,6 @@ tbody td { padding: 11px 14px; color: var(--gray-800); vertical-align: middle; }
   </div>
 </div>
 
-<!-- CHANGE PASSWORD MODAL -->
 <div id="changePwdModal" class="modal-overlay">
   <div class="modal-box">
     <div class="modal-header">
@@ -356,108 +165,52 @@ tbody td { padding: 11px 14px; color: var(--gray-800); vertical-align: middle; }
   </div>
 </div>
 
-<!-- TOAST -->
 <div id="toast"></div>
 
 <script>
-/* API CONFIGURATION - FIXED */
-const API_BASE = 'http://localhost:5000/api';
+// FIX: Use relative /api path, NOT http://localhost:5000/api.
+// The page is served from http://127.0.0.1:5000. Fetching to http://localhost:5000
+// is a DIFFERENT origin — the session cookie (issued to 127.0.0.1) is never
+// attached by the browser, so Cookie is always None and every call returns 401.
+// A relative path is always same-origin regardless of host/IP used to open the page.
+const API_BASE = '/api';
 
 async function apiCall(endpoint, options = {}) {
     const url = `${API_BASE}${endpoint}`;
-    const defaultOptions = {
-        credentials: 'include',  // Important: sends cookies with request
-        headers: {
-            'Content-Type': 'application/json',
-        }
-    };
-    
+    const defaultOptions = { credentials: 'include', headers: { 'Content-Type': 'application/json' } };
     try {
         const response = await fetch(url, { ...defaultOptions, ...options });
-        
-        // Handle 401 Unauthorized
         if (response.status === 401 && options.method !== 'OPTIONS') {
-            console.log('Session expired, redirecting to login');
-            window.location.href = '/login';
-            throw new Error('Session expired');
+            window.location.href = '/'; throw new Error('Session expired');
         }
-
-        // For empty responses (like 204)
-        if (response.status === 204) {
-            return null;
-        }
-
+        if (response.status === 204) return null;
         const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.error || 'API call failed');
-        }
-        
+        if (!response.ok) throw new Error(data.error || 'API call failed');
         return data;
-    } catch (error) {
-        console.error('API call error:', error);
-        throw error;
-    }
+    } catch (error) { console.error('API call error:', error); throw error; }
 }
 
-/* AUTH - FIXED */
 let currentUser = null;
 
-document.addEventListener('DOMContentLoaded', () => {
-    initDashboard();
-});
+document.addEventListener('DOMContentLoaded', () => { initDashboard(); });
 
 async function initDashboard() {
     try {
-        // Check current user first
         const data = await apiCall('/current-user');
-
-        if (!data || !data.user) {
-            console.log('No user data, redirecting to login');
-            window.location.href = '/login';
-            return;
-        }
-
+        if (!data || !data.user) { window.location.href = '/'; return; }
         currentUser = data.user;
-        console.log('Current user:', currentUser);
-
-        // Verify role
-        if (!currentUser.role || currentUser.role.toLowerCase() !== 'student') {
-            console.warn('Unauthorized role:', currentUser.role);
-            window.location.href = '/login';
-            return;
-        }
-
-        // Populate UI
-        updateUserUI();
-
-    } catch (err) {
-        console.error('Dashboard init error:', err);
-        // Only redirect if we're sure it's an auth error
-        if (err.message.includes('Session expired') || err.message.includes('Not logged in')) {
-            window.location.href = '/login';
-        }
-    }
-}
-
-function updateUserUI() {
-    if (currentUser) {
+        if (!currentUser.role || currentUser.role.toLowerCase() !== 'student') { window.location.href = '/'; return; }
         document.getElementById('topName').textContent = currentUser.name || currentUser.username;
         document.getElementById('topAvatar').textContent = (currentUser.name || currentUser.username).charAt(0).toUpperCase();
-        document.getElementById('topRole').textContent = currentUser.role || 'Student';
+        document.getElementById('topRole').textContent = 'Student';
+    } catch (err) {
+        console.error('Dashboard init error:', err);
+        if (err.message.includes('Session expired') || err.message.includes('Not logged in')) window.location.href = '/';
     }
 }
 
-function doLogout() {
-    apiCall('/logout', { method: 'POST' })
-        .then(() => {
-            window.location.href = '/login';
-        })
-        .catch(() => {
-            window.location.href = '/login';
-        });
-}
+function doLogout() { apiCall('/logout', { method:'POST' }).finally(() => { window.location.href = '/'; }); }
 
-/* SECTION MANAGEMENT */
 function showSection(name, btn) {
     document.querySelectorAll('#appMain .page-section').forEach(s => s.classList.remove('active'));
     document.getElementById('ssec-' + name).classList.add('active');
@@ -465,30 +218,20 @@ function showSection(name, btn) {
     if (btn) btn.classList.add('active');
 }
 
-/* LOAD STUDENT RESULT - FIXED */
 async function loadStudentResult() {
     const term = document.getElementById('sTerm').value;
     const session = document.getElementById('sSession').value.trim();
-    
-    if (!session) { 
-        toast('Enter the academic session', 'error'); 
-        return; 
-    }
-
-    // Get student ID from current user
+    if (!session) { toast('Enter the academic session', 'error'); return; }
     const studentId = currentUser.user_id || currentUser.username;
-
     try {
         const scores = await apiCall(`/scores?student_id=${studentId}&term=${encodeURIComponent(term)}&session=${encodeURIComponent(session)}`);
         const sheet = scores[0];
         const area = document.getElementById('studentResultArea');
-
         if (!sheet || !sheet.subjects || sheet.subjects.length === 0) {
             area.style.display = 'block';
             area.innerHTML = `<div class="card" style="text-align:center;padding:40px;color:var(--gray-400);">📭 No result found for ${term}, ${session}.</div>`;
             return;
         }
-
         area.style.display = 'block';
         area.innerHTML = `
             <div class="card">
@@ -499,23 +242,21 @@ async function loadStudentResult() {
                         <div class="rs-title">${term} · ${session}</div>
                     </div>
                     <div class="rs-meta">
-                        <div class="rs-meta-item"><strong>Student Name</strong>${currentUser.name || ''}</div>
+                        <div class="rs-meta-item"><strong>Student Name</strong>${currentUser.name||''}</div>
                         <div class="rs-meta-item"><strong>Student ID</strong>${studentId}</div>
-                        <div class="rs-meta-item"><strong>Class / Level</strong>${currentUser.level || '—'} ${currentUser.arm || ''}</div>
+                        <div class="rs-meta-item"><strong>Class / Level</strong>${currentUser.level||'—'} ${currentUser.arm||''}</div>
                         <div class="rs-meta-item"><strong>No. of Subjects</strong>${sheet.subjects.length}</div>
                     </div>
                     <div class="table-wrap">
                         <table>
                             <thead><tr><th>#</th><th>Subject</th><th>CA 1</th><th>CA 2</th><th>CA 3</th><th>Exam</th><th>Total</th><th>Grade</th><th>Remark</th></tr></thead>
-                            <tbody>
-                                ${sheet.subjects.map((s, i) => `<tr>
-                                    <td>${i + 1}</td><td><strong>${s.subject}</strong></td>
-                                    <td>${s.ca1}</td><td>${s.ca2}</td><td>${s.ca3}</td><td>${s.exam}</td>
-                                    <td><strong>${s.total}</strong></td>
-                                    <td class="${gradeClass(s.grade)}">${s.grade}</td>
-                                    <td>${remark(s.grade)}</td>
-                                </tr>`).join('')}
-                            </tbody>
+                            <tbody>${sheet.subjects.map((s,i)=>`<tr>
+                                <td>${i+1}</td><td><strong>${s.subject}</strong></td>
+                                <td>${s.ca1}</td><td>${s.ca2}</td><td>${s.ca3}</td><td>${s.exam}</td>
+                                <td><strong>${s.total}</strong></td>
+                                <td class="${gradeClass(s.grade)}">${s.grade}</td>
+                                <td>${remark(s.grade)}</td>
+                            </tr>`).join('')}</tbody>
                         </table>
                     </div>
                     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:22px;text-align:center;">
@@ -529,235 +270,98 @@ async function loadStudentResult() {
                     <button class="btn btn-gold-solid" onclick="downloadStudentPDF('${term}','${session}')">📄 Download PDF</button>
                 </div>
             </div>`;
-    } catch (error) {
-        toast('Failed to load result', 'error');
-        console.error(error);
-    }
+    } catch (error) { toast('Failed to load result', 'error'); console.error(error); }
 }
 
-/* DOWNLOAD PDF - FIXED */
 function downloadStudentPDF(term, session) {
     const { jsPDF } = window.jspdf;
     const studentId = currentUser.user_id || currentUser.username;
-    
     setTimeout(async () => {
         try {
             const scores = await apiCall(`/scores?student_id=${studentId}&term=${encodeURIComponent(term)}&session=${encodeURIComponent(session)}`);
             const sheet = scores[0];
-
-            if (!sheet || !sheet.subjects || !sheet.subjects.length) { 
-                toast('No result to download', 'error'); 
-                return; 
-            }
-
-            const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-            const W = 210, margin = 18;
-
-            // Header
-            doc.setFillColor(13, 31, 60);
-            doc.rect(0, 0, W, 36, 'F');
-            doc.setTextColor(200, 149, 46);
-            doc.setFontSize(18); 
-            doc.setFont('helvetica', 'bold');
-            doc.text('DAVIS ACADEMY', W / 2, 14, { align: 'center' });
-            doc.setTextColor(255, 255, 255);
-            doc.setFontSize(9); 
-            doc.setFont('helvetica', 'normal');
-            doc.text('Secondary School · Official Academic Result Sheet', W / 2, 21, { align: 'center' });
-            doc.setFontSize(11); 
-            doc.setFont('helvetica', 'bolditalic');
-            doc.text(`${term}  ·  ${session}`, W / 2, 30, { align: 'center' });
-
-            // Student info box
-            let y = 48;
-            doc.setFillColor(249, 240, 219);
-            doc.roundedRect(margin, y, W - margin * 2, 26, 3, 3, 'F');
-            doc.setTextColor(13, 31, 60); 
-            doc.setFont('helvetica', 'bold'); 
-            doc.setFontSize(9);
-            doc.text('STUDENT NAME', margin + 4, y + 8);
-            doc.text('STUDENT ID', W / 2, y + 8);
-            doc.setFont('helvetica', 'normal'); 
-            doc.setFontSize(11);
-            doc.text(currentUser.name || '', margin + 4, y + 17);
-            doc.text(studentId || '', W / 2, y + 17);
-            doc.setFont('helvetica', 'bold'); 
-            doc.setFontSize(9);
-            doc.text('CLASS', margin + 4, y + 24);
-            doc.setFont('helvetica', 'normal'); 
-            doc.setFontSize(10);
-            doc.text(`${currentUser.level || ''} ${currentUser.arm || ''}`.trim(), margin + 4 + 24, y + 24);
-
-            // Table header
-            y += 36;
-            const cols = [{ label: '#', w: 10 }, { label: 'Subject', w: 46 }, { label: 'CA 1', w: 16 }, { label: 'CA 2', w: 16 }, { label: 'CA 3', w: 16 }, { label: 'Exam', w: 16 }, { label: 'Total', w: 18 }, { label: 'Grade', w: 16 }, { label: 'Remark', w: 24 }];
-            let x = margin;
-            doc.setFillColor(13, 31, 60); 
-            doc.rect(margin, y, W - margin * 2, 8, 'F');
-            doc.setTextColor(255, 255, 255); 
-            doc.setFont('helvetica', 'bold'); 
-            doc.setFontSize(8);
-            cols.forEach(c => { doc.text(c.label, x + 1, y + 5.5); x += c.w; });
-
-            // Table rows
-            y += 8;
-            sheet.subjects.forEach((s, i) => {
-                if (y > 265) { doc.addPage(); y = 20; }
-                const fill = i % 2 === 0 ? [248, 249, 250] : [255, 255, 255];
-                doc.setFillColor(...fill); 
-                doc.rect(margin, y, W - margin * 2, 7.5, 'F');
-                doc.setTextColor(40, 40, 40); 
-                doc.setFont('helvetica', 'normal'); 
-                doc.setFontSize(8.5);
-                x = margin;
-                [i + 1, s.subject, s.ca1, s.ca2, s.ca3, s.exam, s.total, s.grade, remark(s.grade)].forEach((v, j) => {
-                    doc.text(String(v), x + 1, y + 5.2); x += cols[j].w;
-                });
-                y += 7.5;
+            if (!sheet || !sheet.subjects || !sheet.subjects.length) { toast('No result to download','error'); return; }
+            const doc = new jsPDF({unit:'mm',format:'a4'});
+            const W=210, margin=18;
+            doc.setFillColor(13,31,60); doc.rect(0,0,W,36,'F');
+            doc.setTextColor(200,149,46); doc.setFontSize(18); doc.setFont('helvetica','bold');
+            doc.text('DAVIS ACADEMY',W/2,14,{align:'center'});
+            doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont('helvetica','normal');
+            doc.text('Secondary School · Official Academic Result Sheet',W/2,21,{align:'center'});
+            doc.setFontSize(11); doc.setFont('helvetica','bolditalic');
+            doc.text(`${term}  ·  ${session}`,W/2,30,{align:'center'});
+            let y=48;
+            doc.setFillColor(249,240,219); doc.roundedRect(margin,y,W-margin*2,26,3,3,'F');
+            doc.setTextColor(13,31,60); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+            doc.text('STUDENT NAME',margin+4,y+8); doc.text('STUDENT ID',W/2,y+8);
+            doc.setFont('helvetica','normal'); doc.setFontSize(11);
+            doc.text(currentUser.name||'',margin+4,y+17); doc.text(studentId||'',W/2,y+17);
+            y+=36;
+            const cols=[{label:'#',w:10},{label:'Subject',w:46},{label:'CA 1',w:16},{label:'CA 2',w:16},{label:'CA 3',w:16},{label:'Exam',w:16},{label:'Total',w:18},{label:'Grade',w:16},{label:'Remark',w:24}];
+            let x=margin;
+            doc.setFillColor(13,31,60); doc.rect(margin,y,W-margin*2,8,'F');
+            doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(8);
+            cols.forEach(c=>{doc.text(c.label,x+1,y+5.5);x+=c.w;});
+            y+=8;
+            sheet.subjects.forEach((s,i)=>{
+                if(y>265){doc.addPage();y=20;}
+                doc.setFillColor(...(i%2===0?[248,249,250]:[255,255,255])); doc.rect(margin,y,W-margin*2,7.5,'F');
+                doc.setTextColor(40,40,40); doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
+                x=margin;
+                [i+1,s.subject,s.ca1,s.ca2,s.ca3,s.exam,s.total,s.grade,remark(s.grade)].forEach((v,j)=>{doc.text(String(v),x+1,y+5.2);x+=cols[j].w;});
+                y+=7.5;
             });
-
-            // Summary
-            y += 8;
-            const totalMarks = sheet.subjects.reduce((a, s) => a + s.total, 0);
-            const avg = (totalMarks / sheet.subjects.length).toFixed(1);
-            const overallGrade = calcGrade(parseFloat(avg));
-            doc.setFillColor(200, 149, 46);
-            doc.rect(margin, y, W - margin * 2, 12, 'F');
-            doc.setTextColor(255, 255, 255); 
-            doc.setFont('helvetica', 'bold'); 
-            doc.setFontSize(10);
-            doc.text(`Average: ${avg}%   ·   Overall Grade: ${overallGrade}   ·   Subjects: ${sheet.subjects.length}`, margin + 4, y + 8);
-
-            // Footer
-            y += 20;
-            doc.setTextColor(150, 150, 150); 
-            doc.setFont('helvetica', 'normal'); 
-            doc.setFontSize(8);
-            doc.text('A:70–100 Excellent · B:60–69 Very Good · C:50–59 Good · D:45–49 Pass · E:40–44 Pass · F:1–39 Fail', W / 2, y, { align: 'center' });
-            doc.text('© Davis Academy · Generated by Ramsulone Innovations & Services Ltd', W / 2, y + 6, { align: 'center' });
-
-            doc.save(`${currentUser.name}_${term}_${session}_Result.pdf`.replace(/\//g, '-'));
-            toast('PDF downloaded!', 'success');
-        } catch (error) {
-            toast('Failed to download PDF', 'error');
-            console.error(error);
-        }
+            y+=8;
+            const totalMarks=sheet.subjects.reduce((a,s)=>a+s.total,0);
+            const avg=(totalMarks/sheet.subjects.length).toFixed(1);
+            doc.setFillColor(200,149,46); doc.rect(margin,y,W-margin*2,12,'F');
+            doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(10);
+            doc.text(`Average: ${avg}%   ·   Overall Grade: ${calcGrade(parseFloat(avg))}   ·   Subjects: ${sheet.subjects.length}`,margin+4,y+8);
+            y+=20;
+            doc.setTextColor(150,150,150); doc.setFont('helvetica','normal'); doc.setFontSize(8);
+            doc.text('A:70–100 Excellent · B:60–69 Very Good · C:50–59 Good · D:45–49 Pass · E:40–44 Pass · F:1–39 Fail',W/2,y,{align:'center'});
+            doc.save(`${currentUser.name}_${term}_${session}_Result.pdf`.replace(/\//g,'-'));
+            toast('PDF downloaded!','success');
+        } catch (error) { toast('Failed to download PDF','error'); }
     }, 100);
 }
 
-/* CHANGE PASSWORD */
 async function doChangePwd() {
-    const old = document.getElementById('cpOld').value;
-    const nw = document.getElementById('cpNew').value;
-    const conf = document.getElementById('cpConfirm').value;
-
-    if (!old || !nw || !conf) { 
-        toast('Fill all fields', 'error'); 
-        return; 
-    }
-    
-    if (nw !== conf) { 
-        toast('New passwords do not match', 'error'); 
-        return; 
-    }
-    
-    if (nw.length < 6) { 
-        toast('Password must be at least 6 characters', 'error'); 
-        return; 
-    }
-
+    const old=document.getElementById('cpOld').value, nw=document.getElementById('cpNew').value, conf=document.getElementById('cpConfirm').value;
+    if(!old||!nw||!conf){toast('Fill all fields','error');return;}
+    if(nw!==conf){toast('New passwords do not match','error');return;}
+    if(nw.length<6){toast('Password must be at least 6 characters','error');return;}
     try {
-        await apiCall('/change-password', {
-            method: 'POST',
-            body: JSON.stringify({ old_password: old, new_password: nw })
-        });
-
-        toast('Password changed!', 'success');
-        closeModal('changePwdModal');
-        document.getElementById('cpOld').value = '';
-        document.getElementById('cpNew').value = '';
-        document.getElementById('cpConfirm').value = '';
-    } catch (error) {
-        toast(error.message, 'error');
-    }
+        await apiCall('/change-password',{method:'POST',body:JSON.stringify({old_password:old,new_password:nw})});
+        toast('Password changed!','success'); closeModal('changePwdModal');
+        ['cpOld','cpNew','cpConfirm'].forEach(id=>document.getElementById(id).value='');
+    } catch(error){toast(error.message,'error');}
 }
 
-/* GRADING */
-function calcGrade(total) {
-    if (total >= 70 && total <= 100) return 'A';
-    if (total >= 60 && total <= 69) return 'B';
-    if (total >= 50 && total <= 59) return 'C';
-    if (total >= 45 && total <= 49) return 'D';
-    if (total >= 40 && total <= 44) return 'E';
-    if (total >= 1 && total <= 39) return 'F';
-    return '';
-}
-
-function gradeClass(g) {
-    if (!g) return '';
-    if (g === 'A') return 'g-a';
-    if (g === 'B') return 'g-b';
-    if (g === 'C') return 'g-c';
-    if (g === 'D') return 'g-d';
-    if (g === 'E') return 'g-e';
-    if (g === 'F') return 'g-f';
-    return '';
-}
-
-function remark(g) {
-    if (!g) return '';
-    const map = {
-        'A': 'Excellent',
-        'B': 'Very Good',
-        'C': 'Good',
-        'D': 'Pass',
-        'E': 'Pass',
-        'F': 'Fail'
-    };
-    return map[g] || '';
-}
-
-function summaryBlock(subjs) {
-    if (!subjs || !subjs.length) return '';
-    const total = subjs.reduce((a, s) => a + s.total, 0);
-    const avg = (total / subjs.length).toFixed(1);
-    const grade = calcGrade(parseFloat(avg));
-    return `
+function calcGrade(t){if(t>=70)return'A';if(t>=60)return'B';if(t>=50)return'C';if(t>=45)return'D';if(t>=40)return'E';if(t>=1)return'F';return'';}
+function gradeClass(g){const m={A:'g-a',B:'g-b',C:'g-c',D:'g-d',E:'g-e',F:'g-f'};return m[g]||'';}
+function remark(g){const m={A:'Excellent',B:'Very Good',C:'Good',D:'Pass',E:'Pass',F:'Fail'};return m[g]||'';}
+function summaryBlock(subjs){
+    if(!subjs||!subjs.length)return'';
+    const total=subjs.reduce((a,s)=>a+s.total,0), avg=(total/subjs.length).toFixed(1), grade=calcGrade(parseFloat(avg));
+    return `<div style="background:var(--gray-100);padding:16px;border-radius:8px;">
+        <div style="font-size:24px;font-weight:700;color:var(--navy);font-family:'Playfair Display',serif;">${total}</div>
+        <div style="font-size:12px;color:var(--gray-400);margin-top:4px;">TOTAL MARKS</div></div>
         <div style="background:var(--gray-100);padding:16px;border-radius:8px;">
-            <div style="font-size:24px;font-weight:700;color:var(--navy);font-family:'Playfair Display',serif;">${total}</div>
-            <div style="font-size:12px;color:var(--gray-400);margin-top:4px;">TOTAL MARKS</div>
-        </div>
-        <div style="background:var(--gray-100);padding:16px;border-radius:8px;">
-            <div style="font-size:24px;font-weight:700;color:var(--navy);font-family:'Playfair Display',serif;">${avg}%</div>
-            <div style="font-size:12px;color:var(--gray-400);margin-top:4px;">AVERAGE</div>
-        </div>
+        <div style="font-size:24px;font-weight:700;color:var(--navy);font-family:'Playfair Display',serif;">${avg}%</div>
+        <div style="font-size:12px;color:var(--gray-400);margin-top:4px;">AVERAGE</div></div>
         <div style="background:var(--gold-pale);padding:16px;border-radius:8px;">
-            <div style="font-size:24px;font-weight:700;color:var(--gold);font-family:'Playfair Display',serif;">${grade}</div>
-            <div style="font-size:12px;color:var(--gray-400);margin-top:4px;">OVERALL GRADE</div>
-        </div>`;
+        <div style="font-size:24px;font-weight:700;color:var(--gold);font-family:'Playfair Display',serif;">${grade}</div>
+        <div style="font-size:12px;color:var(--gray-400);margin-top:4px;">OVERALL GRADE</div></div>`;
 }
-
-/* HELPERS */
-function openModal(id) { 
-    document.getElementById(id).classList.add('active'); 
+function openModal(id){document.getElementById(id).classList.add('active');}
+function closeModal(id){document.getElementById(id).classList.remove('active');}
+function toast(msg,type=''){
+    const el=document.getElementById('toast');
+    el.textContent=(type==='success'?'✅ ':type==='error'?'❌ ':'ℹ️ ')+msg;
+    el.className='show '+(type||'');clearTimeout(el._t);el._t=setTimeout(()=>el.className='',3500);
 }
-
-function closeModal(id) { 
-    document.getElementById(id).classList.remove('active'); 
-}
-
-function toast(msg, type = '') {
-    const el = document.getElementById('toast');
-    el.textContent = (type === 'success' ? '✅ ' : type === 'error' ? '❌ ' : 'ℹ️ ') + msg;
-    el.className = 'show ' + (type || '');
-    clearTimeout(el._t);
-    el._t = setTimeout(() => el.className = '', 3500);
-}
-
-// Close modals on overlay click
-document.querySelectorAll('.modal-overlay').forEach(o => {
-    o.addEventListener('click', e => { if (e.target === o) o.classList.remove('active'); });
-});
+document.querySelectorAll('.modal-overlay').forEach(o=>{o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('active');});});
 </script>
 </body>
 </html>

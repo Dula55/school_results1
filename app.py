@@ -29,9 +29,6 @@ if os.environ.get('RENDER'):
 else:
     DB_PATH = os.path.join(BASE_DIR, 'davis_academy.db')
 
-# Global connection pool management
-_db_connections = {}
-
 def get_db():
     """Get a database connection with proper error handling"""
     try:
@@ -39,30 +36,17 @@ def get_db():
         db_dir = os.path.dirname(DB_PATH)
         if db_dir and not os.path.exists(db_dir):
             os.makedirs(db_dir, exist_ok=True)
-        
-        # Check if database file exists and is accessible
-        if os.path.exists(DB_PATH):
-            # Test if we can read the file
-            if not os.access(DB_PATH, os.R_OK | os.W_OK):
-                print(f"⚠️ Database file exists but no read/write permission: {DB_PATH}")
-                # Try to fix permissions
-                try:
-                    os.chmod(DB_PATH, 0o666)
-                except:
-                    pass
-        
+
         # Connect with extended timeout and error handling
-        db = sqlite3.connect(DB_PATH, timeout=60, isolation_level=None)
+        db = sqlite3.connect(DB_PATH, timeout=30)
         db.row_factory = sqlite3.Row
-        
+
         # Optimize database for concurrent access
         db.execute("PRAGMA foreign_keys = ON")
-        db.execute("PRAGMA journal_mode = WAL")  # Better concurrency
-        db.execute("PRAGMA synchronous = NORMAL")  # Faster writes with safety
-        db.execute("PRAGMA cache_size = 10000")  # Increase cache size
-        db.execute("PRAGMA busy_timeout = 30000")  # Wait up to 30 seconds for locks
-        db.execute("PRAGMA temp_store = MEMORY")  # Use memory for temp tables
-        
+        db.execute("PRAGMA journal_mode = WAL")
+        db.execute("PRAGMA synchronous = NORMAL")
+        db.execute("PRAGMA busy_timeout = 5000")
+
         return db
     except Exception as e:
         print(f"Database connection error: {e}")
@@ -71,9 +55,9 @@ def get_db():
 
 def safe_db_operation(operation, *args, **kwargs):
     """Wrapper for database operations with retry logic"""
-    max_retries = 5
+    max_retries = 3
     retry_delay = 1
-    
+
     for attempt in range(max_retries):
         conn = None
         try:
@@ -85,7 +69,7 @@ def safe_db_operation(operation, *args, **kwargs):
                 if attempt < max_retries - 1:
                     print(f"Database locked, retrying in {retry_delay}s (attempt {attempt + 1}/{max_retries})")
                     time.sleep(retry_delay)
-                    retry_delay *= 2  # Exponential backoff
+                    retry_delay *= 2
                     continue
             raise
         except Exception as e:
@@ -98,7 +82,7 @@ def safe_db_operation(operation, *args, **kwargs):
                     conn.close()
                 except:
                     pass
-    
+
     raise Exception("Max retries exceeded for database operation")
 
 def hash_password(password):
@@ -115,271 +99,208 @@ def generate_random_password():
 # --------------------------
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
-# Use environment variables for production
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+# Critical: Session configuration MUST be set before initializing Session
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_PERMANENT'] = True
 app.config['SESSION_USE_SIGNER'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-# Set secure cookies in production
-app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'False').lower() == 'true'
+app.config['SESSION_COOKIE_SECURE'] = False  # Set to True only in production with HTTPS
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_COOKIE_DOMAIN'] = None
 app.config['SESSION_COOKIE_NAME'] = 'school_session'
 app.config['SESSION_REFRESH_EACH_REQUEST'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
-app.config['SESSION_FILE_DIR'] = '/tmp/flask_session' if os.environ.get('RENDER') else './flask_session'
+app.config['SESSION_FILE_DIR'] = os.path.join(BASE_DIR, 'flask_session')
+app.config['SESSION_COOKIE_PATH'] = '/'
+app.config['SESSION_COOKIE_DOMAIN'] = None
 
 # Create session directory
 os.makedirs(app.config['SESSION_FILE_DIR'], exist_ok=True)
+# Ensure the directory is writable
+os.chmod(app.config['SESSION_FILE_DIR'], 0o777)
 
-# Critical: Ensure session is saved on every request
-app.config['SESSION_COOKIE_PATH'] = '/'
+# Initialize session extension
+Session(app)
 
-# Allowed origins for CORS - Update for production
-ALLOWED_ORIGINS = {
+# CORS configuration
+ALLOWED_ORIGINS = [
     "http://localhost:5000",
     "http://127.0.0.1:5000",
-}
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5500",
+    "http://127.0.0.1:5500",
+]
 
-# Add Render.com domain if in production
 if os.environ.get('RENDER'):
     render_url = os.environ.get('RENDER_EXTERNAL_URL')
     if render_url:
-        ALLOWED_ORIGINS.add(render_url)
-        ALLOWED_ORIGINS.add(render_url.replace('https://', 'http://'))
-    
-    # Also add the *.onrender.com domain
-    render_service = os.environ.get('RENDER_SERVICE_NAME', '')
-    if render_service:
-        ALLOWED_ORIGINS.add(f"https://{render_service}.onrender.com")
-        ALLOWED_ORIGINS.add(f"http://{render_service}.onrender.com")
+        ALLOWED_ORIGINS.append(render_url)
+        ALLOWED_ORIGINS.append(render_url.replace('https://', 'http://'))
 
-# Initialize extensions
-Session(app)
-
-# Configure CORS properly
-CORS(app, 
-     supports_credentials=True, 
-     origins=list(ALLOWED_ORIGINS),
+# Configure CORS
+CORS(app,
+     supports_credentials=True,
+     origins=ALLOWED_ORIGINS,
      allow_headers=['Content-Type', 'Authorization', 'X-Requested-With'],
-     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+     expose_headers=['Content-Type', 'Authorization'])
 
 # --------------------------
 # Database initialization
 # --------------------------
 def init_db():
     """Initialize database with tables and default data"""
-    max_retries = 5
-    retry_count = 0
-    
-    while retry_count < max_retries:
-        conn = None
-        try:
-            # Check if we can write to the database location
-            db_dir = os.path.dirname(DB_PATH)
-            if db_dir and not os.path.exists(db_dir):
-                os.makedirs(db_dir, exist_ok=True)
-            
-            # Test write permission
-            test_file = os.path.join(db_dir, '.write_test')
-            try:
-                with open(test_file, 'w') as f:
-                    f.write('test')
-                os.remove(test_file)
-                print(f"✅ Write permission confirmed in {db_dir}")
-            except Exception as e:
-                print(f"⚠️ Write test failed: {e}")
-            
-            db_exists = os.path.exists(DB_PATH)
-            if db_exists:
-                print(f"📁 Using existing database at {DB_PATH}")
-                # Verify database integrity
-                conn = get_db()
-                conn.execute("PRAGMA integrity_check").fetchone()
-                print("✅ Database integrity check passed")
-            else:
-                print(f"📁 Creating new database at {DB_PATH}")
+    conn = None
+    try:
+        db_exists = os.path.exists(DB_PATH)
+        if db_exists:
+            print(f"📁 Using existing database at {DB_PATH}")
+        else:
+            print(f"📁 Creating new database at {DB_PATH}")
 
-            if not conn:
-                conn = get_db()
-            
-            c = conn.cursor()
+        conn = get_db()
+        c = conn.cursor()
 
-            # Create tables with error handling
-            tables = [
-                '''CREATE TABLE IF NOT EXISTS admins (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT UNIQUE NOT NULL,
-                    password TEXT NOT NULL,
-                    name TEXT,
-                    role TEXT DEFAULT 'admin',
-                    created_at TEXT
-                )''',
-                '''CREATE TABLE IF NOT EXISTS teachers (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT UNIQUE NOT NULL,
-                    password TEXT NOT NULL,
-                    name TEXT,
-                    email TEXT,
-                    subject TEXT,
-                    phone TEXT,
-                    role TEXT DEFAULT 'teacher',
-                    created_at TEXT
-                )''',
-                '''CREATE TABLE IF NOT EXISTS students (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT UNIQUE NOT NULL,
-                    password TEXT NOT NULL,
-                    name TEXT,
-                    student_id TEXT UNIQUE,
-                    level TEXT,
-                    arm TEXT,
-                    phone TEXT,
-                    role TEXT DEFAULT 'student',
-                    created_at TEXT
-                )''',
-                '''CREATE TABLE IF NOT EXISTS scores (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    student_id TEXT,
-                    term TEXT,
-                    session TEXT,
-                    subject TEXT,
-                    ca1 INTEGER DEFAULT 0,
-                    ca2 INTEGER DEFAULT 0,
-                    ca3 INTEGER DEFAULT 0,
-                    exam INTEGER DEFAULT 0,
-                    total INTEGER DEFAULT 0,
-                    grade TEXT,
-                    created_at TEXT,
-                    updated_at TEXT,
-                    UNIQUE(student_id, term, session, subject)
-                )'''
-            ]
-            
-            for table_sql in tables:
-                try:
-                    c.execute(table_sql)
-                except Exception as e:
-                    print(f"Error creating table: {e}")
-                    raise
+        # Create tables
+        c.execute('''CREATE TABLE IF NOT EXISTS admins (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            name TEXT,
+            role TEXT DEFAULT 'admin',
+            created_at TEXT
+        )''')
 
-            now = datetime.now().isoformat()
+        c.execute('''CREATE TABLE IF NOT EXISTS teachers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            name TEXT,
+            email TEXT,
+            subject TEXT,
+            phone TEXT,
+            role TEXT DEFAULT 'teacher',
+            created_at TEXT
+        )''')
 
-            # Check and create default admin if none exists
-            c.execute("SELECT COUNT(*) as count FROM admins")
-            if c.fetchone()['count'] == 0:
-                admin_password = hash_password(os.environ.get('DEFAULT_ADMIN_PASSWORD', 'admin123'))
-                c.execute('''
-                    INSERT INTO admins (username, password, name, role, created_at)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', ('admin', admin_password, 'System Administrator', 'admin', now))
-                print("✅ Default admin created")
+        c.execute('''CREATE TABLE IF NOT EXISTS students (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            name TEXT,
+            student_id TEXT UNIQUE,
+            level TEXT,
+            arm TEXT,
+            phone TEXT,
+            role TEXT DEFAULT 'student',
+            created_at TEXT
+        )''')
 
-            # Check and create default teacher if none exists
-            c.execute("SELECT COUNT(*) as count FROM teachers")
-            if c.fetchone()['count'] == 0:
-                teacher_password = hash_password(os.environ.get('DEFAULT_TEACHER_PASSWORD', 'teacher123'))
-                c.execute('''
-                    INSERT INTO teachers (username, password, name, email, subject, phone, role, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ''', ('john.doe', teacher_password, 'John Doe', 'john.doe@davis.edu', 'Mathematics', '555-0100', 'teacher', now))
-                print("✅ Default teacher created")
+        c.execute('''CREATE TABLE IF NOT EXISTS scores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id TEXT,
+            term TEXT,
+            session TEXT,
+            subject TEXT,
+            ca1 INTEGER DEFAULT 0,
+            ca2 INTEGER DEFAULT 0,
+            ca3 INTEGER DEFAULT 0,
+            exam INTEGER DEFAULT 0,
+            total INTEGER DEFAULT 0,
+            grade TEXT,
+            created_at TEXT,
+            updated_at TEXT,
+            UNIQUE(student_id, term, session, subject)
+        )''')
 
-            # Check and create default student if none exists
-            c.execute("SELECT COUNT(*) as count FROM students")
-            if c.fetchone()['count'] == 0:
-                student_password = hash_password(os.environ.get('DEFAULT_STUDENT_PASSWORD', 'student123'))
-                student_id = generate_user_id('STU')
-                c.execute('''
-                    INSERT INTO students (username, password, name, student_id, level, arm, phone, role, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', ('jane.smith', student_password, 'Jane Smith', student_id, 'SS3', 'A', '555-0200', 'student', now))
-                print("✅ Default student created")
+        now = datetime.now().isoformat()
 
-            conn.commit()
-            print("✅ Database initialized successfully")
-            verify_data(conn)
-            
-            # Set proper permissions on database file
-            if os.path.exists(DB_PATH):
-                try:
-                    os.chmod(DB_PATH, 0o666)
-                except:
-                    pass
-            
-            break  # Success, exit retry loop
-            
-        except Exception as e:
-            retry_count += 1
-            print(f"❌ Database initialization error (attempt {retry_count}/{max_retries}): {e}")
-            traceback.print_exc()
-            if retry_count >= max_retries:
-                print("❌ Failed to initialize database after multiple attempts")
-                # Don't raise, let the app continue and try again on first request
-            else:
-                print(f"Retrying in 2 seconds...")
-                time.sleep(2)
-        finally:
-            if conn:
-                try:
-                    conn.close()
-                except:
-                    pass
+        # Check and create default admin if none exists
+        c.execute("SELECT COUNT(*) as count FROM admins")
+        if c.fetchone()['count'] == 0:
+            admin_password = hash_password('admin123')
+            c.execute('''
+                INSERT INTO admins (username, password, name, role, created_at)
+                VALUES (?, ?, ?, ?, ?)
+            ''', ('admin', admin_password, 'System Administrator', 'admin', now))
+            print("✅ Default admin created")
 
-def verify_data(conn):
-    """Verify database has data"""
-    c = conn.cursor()
-    c.execute("SELECT COUNT(*) as count FROM admins")
-    print(f"📊 Admins in database: {c.fetchone()['count']}")
-    c.execute("SELECT COUNT(*) as count FROM teachers")
-    print(f"📊 Teachers in database: {c.fetchone()['count']}")
-    c.execute("SELECT COUNT(*) as count FROM students")
-    print(f"📊 Students in database: {c.fetchone()['count']}")
+        # Check and create default teacher if none exists
+        c.execute("SELECT COUNT(*) as count FROM teachers")
+        if c.fetchone()['count'] == 0:
+            teacher_password = hash_password('teacher123')
+            c.execute('''
+                INSERT INTO teachers (username, password, name, email, subject, phone, role, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', ('john.doe', teacher_password, 'John Doe', 'john.doe@davis.edu', 'Mathematics', '555-0100', 'teacher', now))
+            print("✅ Default teacher created")
+
+        # Check and create default student if none exists
+        c.execute("SELECT COUNT(*) as count FROM students")
+        if c.fetchone()['count'] == 0:
+            student_password = hash_password('student123')
+            student_id = generate_user_id('STU')
+            c.execute('''
+                INSERT INTO students (username, password, name, student_id, level, arm, phone, role, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', ('jane.smith', student_password, 'Jane Smith', student_id, 'SS3', 'A', '555-0200', 'student', now))
+            print("✅ Default student created")
+
+        conn.commit()
+        print("✅ Database initialized successfully")
+
+        # Set proper permissions on database file
+        if os.path.exists(DB_PATH):
+            os.chmod(DB_PATH, 0o666)
+
+    except Exception as e:
+        print(f"❌ Database initialization error: {e}")
+        traceback.print_exc()
+    finally:
+        if conn:
+            conn.close()
 
 # --------------------------
-# Critical: Ensure session is saved and cookies are set properly
+# Session and CORS handling
 # --------------------------
 @app.before_request
 def before_request():
     """Setup before each request"""
-    # Log session for debugging (only in development)
-    if not os.environ.get('RENDER') and request.path.startswith('/api/'):
-        print(f"Session before {request.path}: {dict(session)}")
-    
-    # Make session permanent
+    # Log the request
+    print(f"📥 {request.method} {request.path}")
+    print(f"   Headers: Origin={request.headers.get('Origin')}, Cookie={request.headers.get('Cookie')}")
+
+    # Set session to be permanent
     session.permanent = True
-    
-    # Ensure database exists before handling requests
-    if not os.path.exists(DB_PATH):
-        print("Database not found, initializing...")
-        init_db()
+
+    # Log session for debugging
+    if request.path.startswith('/api/'):
+        print(f"🔍 Session before {request.path}: {dict(session)}")
 
 @app.after_request
 def after_request(response):
-    """Cleanup after each request"""
-    # Log session after request (only in development)
-    if not os.environ.get('RENDER') and request.path.startswith('/api/'):
-        print(f"Session after {request.path}: {dict(session)}")
-    
-    # Set CORS headers for all responses
+    """Add headers and log after request"""
+    # Add CORS headers for all responses
     origin = request.headers.get('Origin')
     if origin:
         # Check if origin is allowed
-        if origin in ALLOWED_ORIGINS or any(origin.endswith(domain.replace('*', '')) for domain in ALLOWED_ORIGINS if '*' in domain):
+        if origin in ALLOWED_ORIGINS:
             response.headers['Access-Control-Allow-Origin'] = origin
             response.headers['Access-Control-Allow-Credentials'] = 'true'
             response.headers['Vary'] = 'Origin'
-    
+
+    # Add headers for all responses
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
     response.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS'
-    
-    return response
 
-@app.teardown_appcontext
-def close_db_connections(error):
-    """Close all database connections when app context ends"""
-    pass  # Connections are closed in each function
+    # Log response
+    if request.path.startswith('/api/'):
+        print(f"📤 Response {response.status_code}")
+        print(f"   Session after {request.path}: {dict(session)}")
+        print(f"   Cookies set: {response.headers.get('Set-Cookie', 'None')}")
+
+    return response
 
 # --------------------------
 # Authentication decorator
@@ -389,11 +310,13 @@ def login_required(role=None):
         @wraps(f)
         def wrapped(*args, **kwargs):
             if 'user_id' not in session:
-                if request.path.startswith('/api') or request.accept_mimetypes.best == 'application/json':
+                print(f"❌ Access denied - No user_id in session")
+                if request.path.startswith('/api'):
                     return jsonify({'error': 'Not logged in'}), 401
                 return redirect(url_for('index'))
             if role and session.get('role') != role:
-                if request.path.startswith('/api') or request.accept_mimetypes.best == 'application/json':
+                print(f"❌ Access denied - Wrong role. Expected {role}, got {session.get('role')}")
+                if request.path.startswith('/api'):
                     return jsonify({'error': 'Unauthorized'}), 403
                 return redirect(url_for('index'))
             return f(*args, **kwargs)
@@ -405,12 +328,26 @@ def login_required(role=None):
 # --------------------------
 @app.route('/')
 def index():
-    """Welcome page - accessible to everyone"""
+    """Welcome / login page - accessible to everyone"""
     return render_template("index.html")
 
+# FIX: /login was missing entirely, causing a 404 on every unauthenticated
+# redirect. The 404 handler returned index.html, which re-triggered
+# check-session → dashboard → /api/current-user (Cookie=None, 401) →
+# redirect /login → 404 → index.html → … in an infinite loop.
+# Now /login is a valid route that redirects cleanly to /.
 @app.route('/login')
 def login_page():
-    """Legacy login route - redirects to index"""
+    """Login page — redirect to index which contains the login UI."""
+    # If the user already has a valid session, send them straight to their dashboard.
+    if 'user_id' in session and 'role' in session:
+        dest = {
+            'admin': 'admin_dashboard',
+            'teacher': 'teacher_dashboard',
+            'student': 'student_dashboard',
+        }.get(session.get('role'))
+        if dest:
+            return redirect(url_for(dest))
     return redirect(url_for('index'))
 
 @app.route('/admin_dashboard')
@@ -429,62 +366,213 @@ def student_dashboard():
     return render_template("student_dashboard.html", name=session.get('name'))
 
 # --------------------------
+# API - Current user
+# --------------------------
+@app.route('/api/current-user', methods=['GET', 'OPTIONS'])
+def get_current_user():
+    """Get current user info from session.
+
+    IMPORTANT: The JavaScript that calls this endpoint must pass
+    credentials so the session cookie is forwarded:
+
+        fetch('/api/current-user', { credentials: 'include' })
+
+    Without credentials:'include', Cookie will be None even for a
+    logged-in user, and this endpoint will always return 401.
+    """
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
+    print(f"👤 /api/current-user - Session: {dict(session)}")
+
+    if 'user_id' in session and 'role' in session:
+        user_info = {
+            'user': {
+                'username': session.get('username', ''),
+                'name': session.get('name', ''),
+                'role': session.get('role'),
+                'user_id': session.get('user_id')
+            }
+        }
+
+        # Add role-specific fields
+        if session.get('role') == 'student' and session.get('student_id'):
+            user_info['user']['student_id'] = session.get('student_id')
+
+        return jsonify(user_info)
+
+    return jsonify({'error': 'Not logged in'}), 401
+
+# --------------------------
+# API - Check session
+# --------------------------
+@app.route('/api/check-session', methods=['GET', 'OPTIONS'])
+def check_session():
+    """Check if user is logged in"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
+    print(f"🔑 /api/check-session - Session: {dict(session)}")
+
+    if 'user_id' in session:
+        return jsonify({
+            'logged_in': True,
+            'role': session.get('role'),
+            'name': session.get('name'),
+            'user_id': session.get('user_id')
+        })
+    return jsonify({'logged_in': False})
+
+# --------------------------
+# API - Login
+# --------------------------
+@app.route('/api/login', methods=['POST', 'OPTIONS'])
+def login():
+
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
+    try:
+        data = request.get_json()
+
+        if not data:
+            return jsonify({'error': 'Invalid JSON'}), 400
+
+        role = data.get('role')
+        username = data.get('username')
+        password = data.get('password')
+
+        if not role or not username or not password:
+            return jsonify({'error': 'Missing credentials'}), 400
+
+        hashed_password = hash_password(password)
+
+        def _find_user(conn):
+            c = conn.cursor()
+
+            if role == 'admin':
+                c.execute("SELECT * FROM admins WHERE username=? AND password=?",
+                          (username, hashed_password))
+            elif role == 'teacher':
+                c.execute("SELECT * FROM teachers WHERE username=? AND password=?",
+                          (username, hashed_password))
+            elif role == 'student':
+                c.execute(
+                    "SELECT * FROM students WHERE (username=? OR student_id=?) AND password=?",
+                    (username, username, hashed_password)
+                )
+            else:
+                return None
+
+            row = c.fetchone()
+            if row:
+                return {k: row[k] for k in row.keys()}
+            return None
+
+        user = safe_db_operation(_find_user)
+
+        if not user:
+            return jsonify({'error': 'Invalid credentials'}), 401
+
+        # Reset session
+        session.clear()
+
+        session.permanent = True
+        session['role'] = role
+        session['name'] = user.get('name')
+        session['username'] = user.get('username')
+
+        if role == 'student':
+            session['user_id'] = user.get('student_id') or user.get('username')
+            session['student_id'] = user.get('student_id')
+        else:
+            session['user_id'] = user.get('username')
+
+        session.modified = True
+
+        print("✅ LOGIN SESSION:", dict(session))
+
+        redirect_url = {
+            "admin": "/admin_dashboard",
+            "teacher": "/teacher_dashboard",
+            "student": "/student_dashboard"
+        }.get(role, "/")
+
+        if "password" in user:
+            del user["password"]
+
+        return jsonify({
+            "success": True,
+            "redirect": redirect_url,
+            "user": user
+        })
+
+    except Exception as e:
+        print("LOGIN ERROR:", e)
+        traceback.print_exc()
+        return jsonify({'error': 'Server error'}), 500
+
+# --------------------------
+# API - Logout
+# --------------------------
+@app.route('/api/logout', methods=['POST', 'OPTIONS'])
+def logout():
+    """Logout user"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
+    session.clear()
+    response = jsonify({'success': True})
+    response.set_cookie('school_session', '', expires=0)
+    return response
+
+# --------------------------
 # API - Students
 # --------------------------
 @app.route('/api/students', methods=['GET', 'OPTIONS'])
 def get_students():
     if request.method == 'OPTIONS':
-        return make_response('', 204)
-    
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
     if 'user_id' not in session:
         return jsonify({'error': 'Not logged in'}), 401
-    
+
     try:
         def _get_students(conn):
             c = conn.cursor()
             c.execute("SELECT username, name, student_id, level, arm FROM students ORDER BY name")
             return [{k: row[k] for k in row.keys()} for row in c.fetchall()]
-        
+
         students = safe_db_operation(_get_students)
         return jsonify(students)
     except Exception as e:
         print(f"Error fetching students: {e}")
-        traceback.print_exc()
         return jsonify({'error': 'Failed to fetch students'}), 500
-
-# --------------------------
-# API - Current user
-# --------------------------
-@app.route('/api/current-user', methods=['GET', 'OPTIONS'])
-def get_current_user():
-    if request.method == 'OPTIONS':
-        response = make_response('', 204)
-        return response
-
-    if not os.environ.get('RENDER'):
-        print(f"Current session in /api/current-user: {dict(session)}")
-    
-    if 'user_id' in session and 'role' in session:
-        # Get additional user data from database
-        role = session.get('role')
-        user_id = session.get('user_id')
-        
-        user_info = {
-            'user': {
-                'username': session.get('username', ''),
-                'name': session.get('name', ''),
-                'role': role,
-                'user_id': user_id
-            }
-        }
-        
-        # Add role-specific fields
-        if role == 'student':
-            user_info['user']['student_id'] = session.get('student_id', user_id)
-        
-        return jsonify(user_info)
-    
-    return jsonify({'error': 'Not logged in'}), 401
 
 # --------------------------
 # API - Teacher Results
@@ -492,18 +580,22 @@ def get_current_user():
 @app.route('/api/teacher-results', methods=['GET', 'OPTIONS'])
 def get_teacher_results():
     if request.method == 'OPTIONS':
-        return make_response('', 204)
-    
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
     if 'user_id' not in session:
         return jsonify({'error': 'Not logged in'}), 401
-    
+
     try:
         term = request.args.get('term')
-        
+
         def _get_results(conn):
             c = conn.cursor()
-            
-            # Get all scores with student details
+
             query = '''
                 SELECT s.student_id, s.term, s.session, s.subject, s.ca1, s.ca2, s.ca3, s.exam, s.total, s.grade,
                        stu.name, stu.level, stu.arm
@@ -511,18 +603,18 @@ def get_teacher_results():
                 JOIN students stu ON s.student_id = stu.student_id
             '''
             params = []
-            
+
             if term:
                 query += ' WHERE s.term = ?'
                 params.append(term)
-            
+
             query += ' ORDER BY stu.name, s.session DESC, s.term, s.subject'
-            
+
             c.execute(query, params)
             return c.fetchall()
-        
+
         rows = safe_db_operation(_get_results)
-        
+
         # Group by student, term, session
         results = {}
         for row in rows:
@@ -539,7 +631,7 @@ def get_teacher_results():
                     'total_score': 0,
                     'subject_count': 0
                 }
-            
+
             results[key]['subjects'].append({
                 'subject': row['subject'],
                 'ca1': row['ca1'],
@@ -551,7 +643,7 @@ def get_teacher_results():
             })
             results[key]['total_score'] += row['total']
             results[key]['subject_count'] += 1
-        
+
         # Calculate averages
         result_list = []
         for key, data in results.items():
@@ -561,12 +653,11 @@ def get_teacher_results():
             else:
                 data['average'] = '-'
             result_list.append(data)
-        
+
         return jsonify(result_list)
-        
+
     except Exception as e:
         print(f"Error fetching teacher results: {e}")
-        traceback.print_exc()
         return jsonify({'error': 'Failed to fetch results'}), 500
 
 # --------------------------
@@ -575,7 +666,12 @@ def get_teacher_results():
 @app.route('/api/scores', methods=['GET', 'POST', 'DELETE', 'OPTIONS'])
 def api_scores():
     if request.method == 'OPTIONS':
-        return make_response('', 204)
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
 
     if 'user_id' not in session:
         return jsonify({'error': 'Not logged in'}), 401
@@ -627,7 +723,7 @@ def api_scores():
                             'subjects': subjects
                         })
                     return results
-            
+
             result = safe_db_operation(_get_scores)
             return jsonify(result)
 
@@ -643,7 +739,7 @@ def api_scores():
             ca3 = data['ca3']
             exam = data['exam']
             total = ca1 + ca2 + ca3 + exam
-            
+
             # Calculate grade
             if total >= 70:
                 grade = 'A'
@@ -667,7 +763,7 @@ def api_scores():
                 ''', (data['student_id'], data['term'], data['session'], data['subject']))
                 if c.fetchone():
                     return False
-                
+
                 now = datetime.now().isoformat()
                 c.execute('''
                     INSERT INTO scores
@@ -677,7 +773,7 @@ def api_scores():
                       ca1, ca2, ca3, exam, total, grade, now, now))
                 conn.commit()
                 return True
-            
+
             success = safe_db_operation(_add_score)
             if success:
                 return jsonify({'success': True, 'message': 'Score added successfully'})
@@ -700,7 +796,7 @@ def api_scores():
                 ''', (student_id, term, session_param, subject))
                 conn.commit()
                 return c.rowcount > 0
-            
+
             deleted = safe_db_operation(_delete_score)
             if deleted:
                 return jsonify({'success': True, 'message': 'Score deleted successfully'})
@@ -709,7 +805,6 @@ def api_scores():
 
     except Exception as e:
         print(f"Error in /api/scores: {e}")
-        traceback.print_exc()
         return jsonify({'error': 'Failed to process scores'}), 500
 
 # --------------------------
@@ -718,18 +813,23 @@ def api_scores():
 @app.route('/api/teachers', methods=['GET', 'POST', 'OPTIONS'])
 def teachers_api():
     if request.method == 'OPTIONS':
-        return make_response('', 204)
-    
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
     if 'user_id' not in session:
         return jsonify({'error': 'Not logged in'}), 401
-        
+
     if request.method == 'GET':
         try:
             def _get_teachers(conn):
                 c = conn.cursor()
                 c.execute("SELECT username, name, email, subject, phone, role FROM teachers")
                 return [{k: r[k] for k in r.keys()} for r in c.fetchall()]
-            
+
             teachers = safe_db_operation(_get_teachers)
             return jsonify(teachers)
         except Exception as e:
@@ -763,13 +863,13 @@ def teachers_api():
                     return True
                 except sqlite3.IntegrityError:
                     return False
-            
+
             success = safe_db_operation(_add_teacher)
             if success:
                 return jsonify({'success': True, 'username': username, 'password': password, 'name': name})
             else:
                 return jsonify({'error': 'Teacher with this email already exists'}), 400
-                
+
         except Exception as e:
             print(f"Error adding teacher: {e}")
             return jsonify({'error': str(e)}), 500
@@ -777,18 +877,23 @@ def teachers_api():
 @app.route('/api/teachers/<username>', methods=['DELETE', 'OPTIONS'])
 def delete_teacher(username):
     if request.method == 'OPTIONS':
-        return make_response('', 204)
-    
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'DELETE,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
     if 'user_id' not in session:
         return jsonify({'error': 'Not logged in'}), 401
-        
+
     try:
         def _delete_teacher(conn):
             c = conn.cursor()
             c.execute("DELETE FROM teachers WHERE username = ?", (username,))
             conn.commit()
             return c.rowcount > 0
-        
+
         deleted = safe_db_operation(_delete_teacher)
         if deleted:
             return jsonify({'success': True})
@@ -802,18 +907,23 @@ def delete_teacher(username):
 @app.route('/api/students/manage', methods=['GET', 'POST', 'OPTIONS'])
 def students_manage_api():
     if request.method == 'OPTIONS':
-        return make_response('', 204)
-    
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
     if 'user_id' not in session:
         return jsonify({'error': 'Not logged in'}), 401
-        
+
     if request.method == 'GET':
         try:
             def _get_students(conn):
                 c = conn.cursor()
                 c.execute("SELECT username, name, student_id, level, arm, phone, role FROM students")
                 return [{k: r[k] for k in r.keys()} for r in c.fetchall()]
-            
+
             students = safe_db_operation(_get_students)
             return jsonify(students)
         except Exception as e:
@@ -847,13 +957,13 @@ def students_manage_api():
                     return True
                 except sqlite3.IntegrityError:
                     return False
-            
+
             success = safe_db_operation(_add_student)
             if success:
                 return jsonify({'success': True, 'username': username, 'student_id': student_id, 'password': password, 'name': name})
             else:
                 return jsonify({'error': 'Student with this ID or username already exists'}), 400
-                
+
         except Exception as e:
             print(f"Error adding student: {e}")
             return jsonify({'error': str(e)}), 500
@@ -861,11 +971,16 @@ def students_manage_api():
 @app.route('/api/students/manage/<student_id>', methods=['DELETE', 'OPTIONS'])
 def delete_student_manage(student_id):
     if request.method == 'OPTIONS':
-        return make_response('', 204)
-    
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'DELETE,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
     if 'user_id' not in session:
         return jsonify({'error': 'Not logged in'}), 401
-        
+
     try:
         def _delete_student(conn):
             c = conn.cursor()
@@ -873,7 +988,7 @@ def delete_student_manage(student_id):
             c.execute("DELETE FROM students WHERE student_id = ?", (student_id,))
             conn.commit()
             return c.rowcount > 0
-        
+
         deleted = safe_db_operation(_delete_student)
         if deleted:
             return jsonify({'success': True})
@@ -887,7 +1002,12 @@ def delete_student_manage(student_id):
 @app.route('/api/scores/manage', methods=['GET', 'POST', 'OPTIONS'])
 def scores_manage_api():
     if request.method == 'OPTIONS':
-        return make_response('', 204)
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
 
     if 'user_id' not in session:
         return jsonify({'error': 'Not logged in'}), 401
@@ -895,7 +1015,7 @@ def scores_manage_api():
     if request.method == 'GET':
         try:
             student_id = request.args.get('student_id')
-            
+
             def _get_scores(conn):
                 c = conn.cursor()
                 if student_id:
@@ -908,7 +1028,7 @@ def scores_manage_api():
                         SELECT * FROM scores ORDER BY student_id, session DESC, term, subject
                     ''')
                 return [{k: r[k] for k in r.keys()} for r in c.fetchall()]
-            
+
             scores = safe_db_operation(_get_scores)
             return jsonify(scores)
         except Exception as e:
@@ -932,7 +1052,7 @@ def scores_manage_api():
                 return jsonify({'error': 'Missing required fields'}), 400
 
             now = datetime.now().isoformat()
-            
+
             def _save_score(conn):
                 c = conn.cursor()
                 c.execute('''
@@ -942,7 +1062,7 @@ def scores_manage_api():
                 ''', (student_id, term, session_val, subject, ca1, ca2, ca3, exam, total, grade, now, now))
                 conn.commit()
                 return True
-            
+
             safe_db_operation(_save_score)
             return jsonify({'success': True})
         except Exception as e:
@@ -955,11 +1075,16 @@ def scores_manage_api():
 @app.route('/api/scores/delete', methods=['POST', 'OPTIONS'])
 def delete_score_manage():
     if request.method == 'OPTIONS':
-        return make_response('', 204)
-    
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
     if 'user_id' not in session:
         return jsonify({'error': 'Not logged in'}), 401
-        
+
     try:
         data = request.get_json() or {}
         student_id = data.get('student_id')
@@ -968,7 +1093,7 @@ def delete_score_manage():
         session_val = data.get('session')
         if not all([student_id, subject, term, session_val]):
             return jsonify({'error': 'Missing required fields'}), 400
-        
+
         def _delete_score(conn):
             c = conn.cursor()
             c.execute('''
@@ -976,7 +1101,7 @@ def delete_score_manage():
             ''', (student_id, subject, term, session_val))
             conn.commit()
             return c.rowcount > 0
-        
+
         deleted = safe_db_operation(_delete_score)
         if deleted:
             return jsonify({'success': True})
@@ -987,11 +1112,16 @@ def delete_score_manage():
 @app.route('/api/scores/delete-sheet', methods=['POST', 'OPTIONS'])
 def delete_score_sheet():
     if request.method == 'OPTIONS':
-        return make_response('', 204)
-    
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
     if 'user_id' not in session:
         return jsonify({'error': 'Not logged in'}), 401
-        
+
     try:
         data = request.get_json() or {}
         student_id = data.get('student_id')
@@ -999,7 +1129,7 @@ def delete_score_sheet():
         session_val = data.get('session')
         if not all([student_id, term, session_val]):
             return jsonify({'error': 'Missing required fields'}), 400
-        
+
         def _delete_sheet(conn):
             c = conn.cursor()
             c.execute('''
@@ -1007,7 +1137,7 @@ def delete_score_sheet():
             ''', (student_id, term, session_val))
             conn.commit()
             return c.rowcount > 0
-        
+
         deleted = safe_db_operation(_delete_sheet)
         if deleted:
             return jsonify({'success': True})
@@ -1016,246 +1146,82 @@ def delete_score_sheet():
         return jsonify({'error': str(e)}), 500
 
 # --------------------------
-# API - Login / Logout / Check session
+# API - Change password
 # --------------------------
-@app.route('/api/login', methods=['POST', 'OPTIONS'])
-def login():
-    if request.method == 'OPTIONS':
-        return make_response('', 204)
-    
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'Invalid JSON data'}), 400
-
-        role = data.get('role')
-        username = data.get('username', '').strip()
-        password = data.get('password', '')
-
-        if not all([role, username, password]):
-            return jsonify({'error': 'All fields are required'}), 400
-
-        hashed_password = hash_password(password)
-        
-        # Use safe_db_operation for login
-        def _find_user(conn):
-            c = conn.cursor()
-            if role == 'admin':
-                c.execute("SELECT * FROM admins WHERE username = ? AND password = ?", (username, hashed_password))
-            elif role == 'teacher':
-                c.execute("SELECT * FROM teachers WHERE username = ? AND password = ?", (username, hashed_password))
-            elif role == 'student':
-                c.execute("SELECT * FROM students WHERE (username = ? OR student_id = ?) AND password = ?", (username, username, hashed_password))
-            else:
-                return None
-            
-            row = c.fetchone()
-            if row:
-                return {k: row[k] for k in row.keys()}
-            return None
-        
-        try:
-            user = safe_db_operation(_find_user)
-        except Exception as e:
-            print(f"Database error during login: {e}")
-            return jsonify({'error': 'Database temporarily unavailable. Please try again.'}), 503
-
-        if not user:
-            return jsonify({'error': 'Invalid credentials'}), 401
-
-        # Clear any existing session
-        session.clear()
-        
-        # Set session data
-        session.permanent = True
-        session['role'] = role
-        session['name'] = user.get('name', '')
-        session['username'] = user.get('username', '')
-        
-        if role == 'student':
-            session['user_id'] = user.get('student_id') or user.get('username')
-            # Also store student_id separately for convenience
-            if user.get('student_id'):
-                session['student_id'] = user.get('student_id')
-        else:
-            session['user_id'] = user.get('username')
-        
-        # Force session save
-        session.modified = True
-
-        # Log success (but not in production)
-        if not os.environ.get('RENDER'):
-            print(f"Session after login: {dict(session)}")
-
-        redirect_url = {
-            'admin': '/admin_dashboard',
-            'teacher': '/teacher_dashboard',
-            'student': '/student_dashboard'
-        }.get(role, '/')
-
-        # Remove password from user object
-        user.pop('password', None)
-        
-        # Create response with proper CORS headers
-        response = jsonify({'success': True, 'redirect': redirect_url, 'user': user})
-        
-        return response
-    
-    except Exception as e:
-        print(f"Login error: {e}")
-        traceback.print_exc()
-        return jsonify({'error': 'Server error occurred. Please try again.'}), 500
-
-@app.route('/api/logout', methods=['POST', 'OPTIONS'])
-def logout():
-    if request.method == 'OPTIONS':
-        return make_response('', 204)
-    
-    session.clear()
-    response = jsonify({'success': True})
-    # Clear session cookie
-    response.set_cookie('school_session', '', expires=0)
-    return response
-
-@app.route('/api/check-session', methods=['GET', 'OPTIONS'])
-def check_session():
-    if request.method == 'OPTIONS':
-        return make_response('', 204)
-    
-    if not os.environ.get('RENDER'):
-        print(f"Session in check-session: {dict(session)}")
-    
-    if 'user_id' in session:
-        return jsonify({
-            'logged_in': True, 
-            'role': session.get('role'), 
-            'name': session.get('name'), 
-            'user_id': session.get('user_id')
-        })
-    return jsonify({'logged_in': False})
-
 @app.route('/api/change-password', methods=['POST', 'OPTIONS'])
 def change_password():
     if request.method == 'OPTIONS':
-        return make_response('', 204)
-    
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
     if 'user_id' not in session:
         return jsonify({'error': 'Not logged in'}), 401
-        
+
     try:
         data = request.get_json() or {}
         old_password = data.get('old_password')
         new_password = data.get('new_password')
-        
+
         if not old_password or not new_password:
             return jsonify({'error': 'All fields are required'}), 400
         if len(new_password) < 6:
             return jsonify({'error': 'Password must be at least 6 characters'}), 400
-        
+
         role = session.get('role')
         user_id = session.get('user_id')
-        
+
         if not role or not user_id:
             return jsonify({'error': 'Not logged in'}), 401
 
         hashed_old = hash_password(old_password)
         hashed_new = hash_password(new_password)
-        
+
         def _change_password(conn):
             c = conn.cursor()
             if role == 'admin':
-                c.execute('UPDATE admins SET password = ? WHERE username = ? AND password = ?', 
+                c.execute('UPDATE admins SET password = ? WHERE username = ? AND password = ?',
                          (hashed_new, user_id, hashed_old))
             elif role == 'teacher':
-                c.execute('UPDATE teachers SET password = ? WHERE username = ? AND password = ?', 
+                c.execute('UPDATE teachers SET password = ? WHERE username = ? AND password = ?',
                          (hashed_new, user_id, hashed_old))
             else:  # student
-                c.execute('UPDATE students SET password = ? WHERE (student_id = ? OR username = ?) AND password = ?', 
+                c.execute('UPDATE students SET password = ? WHERE (student_id = ? OR username = ?) AND password = ?',
                          (hashed_new, user_id, user_id, hashed_old))
-            
+
             if c.rowcount == 0:
                 return False
-            
+
             conn.commit()
             return True
-        
+
         success = safe_db_operation(_change_password)
         if success:
             return jsonify({'success': True})
         else:
             return jsonify({'error': 'Current password is incorrect'}), 400
-    
+
     except Exception as e:
         print(f"Change password error: {e}")
         return jsonify({'error': str(e)}), 500
 
 # --------------------------
-# Debug endpoints
-# --------------------------
-@app.route('/api/debug/users', methods=['GET'])
-def debug_users():
-    # Only allow debug in development or with special token
-    if os.environ.get('RENDER') and not os.environ.get('DEBUG_ENABLED'):
-        return jsonify({'error': 'Debug endpoint disabled in production'}), 403
-    
-    try:
-        def _get_users(conn):
-            c = conn.cursor()
-            result = {'admins': [], 'teachers': [], 'students': []}
-            
-            c.execute("SELECT username, name, role, created_at FROM admins")
-            for r in c.fetchall():
-                result['admins'].append({k: r[k] for k in r.keys()})
-            
-            c.execute("SELECT username, name, email, subject, role FROM teachers")
-            for r in c.fetchall():
-                result['teachers'].append({k: r[k] for k in r.keys()})
-            
-            c.execute("SELECT username, name, student_id, level, arm, role FROM students")
-            for r in c.fetchall():
-                result['students'].append({k: r[k] for k in r.keys()})
-            
-            return result
-        
-        users = safe_db_operation(_get_users)
-        return jsonify(users)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# --------------------------
-# Health check endpoint for Render
+# Health check
 # --------------------------
 @app.route('/health', methods=['GET'])
 def health_check():
-    """Health check endpoint for Render.com"""
+    """Health check endpoint"""
     try:
         def _check_db(conn):
             conn.execute("SELECT 1").fetchone()
-            
-            # Check if we have users
-            c = conn.cursor()
-            c.execute("SELECT COUNT(*) as count FROM admins")
-            admin_count = c.fetchone()['count']
-            c.execute("SELECT COUNT(*) as count FROM teachers")
-            teacher_count = c.fetchone()['count']
-            c.execute("SELECT COUNT(*) as count FROM students")
-            student_count = c.fetchone()['count']
-            
-            return {
-                'admins': admin_count,
-                'teachers': teacher_count,
-                'students': student_count
-            }
-        
-        stats = safe_db_operation(_check_db)
-        
-        return jsonify({
-            'status': 'healthy', 
-            'database': 'connected',
-            'stats': stats
-        }), 200
+            return True
+
+        safe_db_operation(_check_db)
+        return jsonify({'status': 'healthy'}), 200
     except Exception as e:
-        print(f"Health check failed: {e}")
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
 
 # --------------------------
@@ -1281,34 +1247,19 @@ def internal_error(error):
 if __name__ == '__main__':
     print("🚀 Davis Academy Portal Starting...")
     print(f"Python version: {sys.version}")
-    print(f"Current directory: {os.getcwd()}")
-    
+    print(f"Session directory: {app.config['SESSION_FILE_DIR']}")
+    print(f"Database path: {DB_PATH}")
+
     # Initialize database
     init_db()
-    
-    # Check if running on Render
+
+    # Run app
     if os.environ.get('RENDER'):
-        print("📡 Running on Render.com")
         port = int(os.environ.get('PORT', 10000))
-        print(f"\n" + "="*50)
-        print(f"📍 Server will start on port {port}")
-        print(f"📍 Database path: {DB_PATH}")
-        print(f"📍 Session path: {app.config['SESSION_FILE_DIR']}")
-        print("\n📍 Make sure to set these environment variables in Render:")
-        print("   - SECRET_KEY: (set a secure random string)")
-        print("   - SESSION_COOKIE_SECURE: True")
-        print("   - DEFAULT_ADMIN_PASSWORD: (optional)")
-        print("   - DEFAULT_TEACHER_PASSWORD: (optional)")
-        print("   - DEFAULT_STUDENT_PASSWORD: (optional)")
-        print("="*50 + "\n")
-        
-        # Production settings for Render
         app.run(debug=False, host='0.0.0.0', port=port)
     else:
         print("\n" + "="*50)
         print("📍 Server: http://localhost:5000")
-        print("📍 Welcome page: http://localhost:5000")
-        print("📍 Debug users: http://localhost:5000/api/debug/users")
         print("\n🔑 Default credentials:")
         print("   - Admin: admin / admin123")
         print("   - Teacher: john.doe / teacher123")

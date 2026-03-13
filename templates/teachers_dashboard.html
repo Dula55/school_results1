@@ -10,285 +10,102 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root {
-  --navy: #0d1f3c;
-  --navy-mid: #1a3460;
-  --navy-light: #2a4a80;
-  --gold: #c8952e;
-  --gold-light: #e6b84a;
-  --gold-pale: #f9f0db;
-  --cream: #fdf8f2;
-  --white: #ffffff;
-  --gray-100: #f4f5f7;
-  --gray-200: #e8eaed;
-  --gray-400: #9aa0aa;
-  --gray-600: #5c6370;
-  --gray-800: #2d3340;
-  --red: #c0392b;
-  --green: #1a6b3a;
-  --green-light: #e8f5ee;
-  --red-light: #fdecea;
-  --shadow-sm: 0 1px 3px rgba(13,31,60,0.08);
-  --shadow-md: 0 4px 16px rgba(13,31,60,0.12);
-  --shadow-lg: 0 12px 40px rgba(13,31,60,0.18);
-  --radius: 10px;
-  --radius-lg: 16px;
+  --navy:#0d1f3c;--navy-mid:#1a3460;--navy-light:#2a4a80;
+  --gold:#c8952e;--gold-light:#e6b84a;--gold-pale:#f9f0db;
+  --cream:#fdf8f2;--white:#ffffff;
+  --gray-100:#f4f5f7;--gray-200:#e8eaed;--gray-400:#9aa0aa;--gray-600:#5c6370;--gray-800:#2d3340;
+  --red:#c0392b;--green:#1a6b3a;--green-light:#e8f5ee;--red-light:#fdecea;
+  --shadow-sm:0 1px 3px rgba(13,31,60,0.08);--shadow-md:0 4px 16px rgba(13,31,60,0.12);
+  --shadow-lg:0 12px 40px rgba(13,31,60,0.18);--radius:10px;--radius-lg:16px;
 }
-
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
-  font-family: 'DM Sans', sans-serif;
-  background: var(--cream);
-  color: var(--gray-800);
-  min-height: 100vh;
-  font-size: 15px;
-}
-
-/* APP SHELL */
-#appShell { display: flex; min-height: 100vh; flex-direction: column; }
-
-.app-topbar {
-  background: var(--navy);
-  padding: 0 28px;
-  height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  position: sticky;
-  top: 0;
-  z-index: 200;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-}
-
-.topbar-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.topbar-crest { width: 36px; height: 36px; background: var(--gold); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; }
-.topbar-brand span { font-family: 'Playfair Display', serif; color: white; font-size: 1.1rem; }
-
-.topbar-right { display: flex; align-items: center; gap: 16px; }
-.user-chip {
-  display: flex; align-items: center; gap: 10px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 30px;
-  padding: 6px 14px 6px 6px;
-}
-.user-avatar {
-  width: 32px; height: 32px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 700; font-size: 14px; color: var(--navy);
-  background: var(--gold);
-}
-.user-chip .uname { color: white; font-size: 13px; font-weight: 500; }
-.user-chip .urole { color: rgba(255,255,255,0.5); font-size: 11px; }
-
-.btn-logout { background: rgba(255,255,255,0.1); border: none; color: rgba(255,255,255,0.7); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-family: 'DM Sans',sans-serif; font-size: 13px; font-weight: 500; transition: all 0.2s; }
-.btn-logout:hover { background: rgba(255,255,255,0.2); color: white; }
-
-.app-layout { display: flex; flex: 1; min-height: 0; }
-
-.sidebar {
-  width: 220px;
-  background: white;
-  border-right: 1px solid var(--gray-200);
-  padding: 24px 0;
-  flex-shrink: 0;
-  overflow-y: auto;
-  position: sticky;
-  top: 64px;
-  height: calc(100vh - 64px);
-}
-
-.sidebar-section { padding: 0 16px; margin-bottom: 8px; }
-.sidebar-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--gray-400); padding: 0 8px; margin-bottom: 6px; margin-top: 16px; }
-
-.nav-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.15s;
-  color: var(--gray-600);
-  font-size: 14px;
-  font-weight: 500;
-  border: none;
-  background: none;
-  width: 100%;
-  text-align: left;
-}
-.nav-item:hover { background: var(--gray-100); color: var(--navy); }
-.nav-item.active { background: var(--gold-pale); color: var(--navy); font-weight: 600; }
-.nav-item.active .nav-icon { color: var(--gold); }
-.nav-icon { font-size: 16px; width: 20px; text-align: center; }
-
-.app-main { flex: 1; padding: 32px 36px; overflow-y: auto; }
-
-.page-section { display: none; }
-.page-section.active { display: block; }
-
-.page-title { font-family: 'Playfair Display', serif; font-size: 1.7rem; color: var(--navy); margin-bottom: 6px; }
-.page-subtitle { color: var(--gray-400); font-size: 0.88rem; margin-bottom: 28px; }
-
-/* CARD */
-.card { background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius-lg); padding: 28px; box-shadow: var(--shadow-sm); margin-bottom: 24px; }
-.card-title { font-family: 'Playfair Display', serif; font-size: 1.1rem; color: var(--navy); margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
-.card-title::before { content: ''; display: block; width: 4px; height: 20px; background: var(--gold); border-radius: 2px; }
-
-/* TABLE */
-.table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--gray-200); }
-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-thead th { background: var(--navy); color: white; padding: 12px 14px; text-align: left; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
-tbody tr { border-bottom: 1px solid var(--gray-200); transition: background 0.1s; }
-tbody tr:last-child { border-bottom: none; }
-tbody tr:hover { background: var(--gray-100); }
-tbody td { padding: 11px 14px; color: var(--gray-800); vertical-align: middle; }
-
-.badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
-.badge-navy { background: rgba(13,31,60,0.1); color: var(--navy); }
-.badge-gold { background: var(--gold-pale); color: #8a6000; }
-.badge-green { background: var(--green-light); color: var(--green); }
-.badge-red { background: var(--red-light); color: var(--red); }
-
-.action-cell { display: flex; gap: 6px; flex-wrap: wrap; }
-
-/* SEARCH */
-.table-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
-.search-input { padding: 9px 14px 9px 36px; border: 1.5px solid var(--gray-200); border-radius: 8px; font-family: 'DM Sans',sans-serif; font-size: 14px; outline: none; transition: border-color 0.2s; width: 240px; }
-.search-input:focus { border-color: var(--navy-light); }
-.search-wrap { position: relative; }
-.search-wrap::before { content:'🔍'; position:absolute; left:10px; top:50%; transform:translateY(-50%); font-size:13px; pointer-events:none; }
-
-/* MODAL */
-.modal-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(13,31,60,0.65);
-  backdrop-filter: blur(4px);
-  z-index: 500;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  animation: fadeIn 0.2s;
-}
-.modal-overlay.active { display: flex; }
-
-@keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
-@keyframes slideUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
-
-.modal-box {
-  background: var(--white);
-  border-radius: var(--radius-lg);
-  width: 100%;
-  max-width: 440px;
-  box-shadow: var(--shadow-lg);
-  animation: slideUp 0.25s;
-  overflow: hidden;
-}
-.modal-box.wide { max-width: 640px; }
-
-.modal-header {
-  background: var(--navy);
-  padding: 28px 30px 22px;
-  position: relative;
-}
-.modal-header .crest-sm {
-  width: 42px; height: 42px; background: var(--gold);
-  border-radius: 50%; display: flex; align-items: center;
-  justify-content: center; font-size: 18px; margin-bottom: 12px;
-}
-.modal-header h2 { font-family:'Playfair Display',serif; color:var(--white); font-size:1.4rem; }
-.modal-header p { color:rgba(255,255,255,0.55); font-size:0.85rem; margin-top:4px; }
-
-.modal-close {
-  position: absolute;
-  top: 18px; right: 20px;
-  background: rgba(255,255,255,0.12);
-  border: none; color: white; width: 32px; height: 32px;
-  border-radius: 50%; cursor: pointer; font-size: 18px;
-  display: flex; align-items: center; justify-content: center;
-  transition: background 0.2s;
-}
-.modal-close:hover { background: rgba(255,255,255,0.22); }
-
-.modal-body { padding: 28px 30px; }
-
-/* FORMS */
-.form-group { margin-bottom: 18px; }
-.form-group label { display: block; font-weight: 600; font-size: 0.82rem; color: var(--gray-800); margin-bottom: 6px; letter-spacing: 0.3px; text-transform: uppercase; }
-.form-group input, .form-group select, .form-group textarea {
-  width: 100%; padding: 11px 14px;
-  border: 1.5px solid var(--gray-200);
-  border-radius: 8px;
-  font-family: 'DM Sans', sans-serif;
-  font-size: 14px;
-  color: var(--gray-800);
-  background: var(--white);
-  transition: border-color 0.2s, box-shadow 0.2s;
-  outline: none;
-}
-.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
-  border-color: var(--navy-light);
-  box-shadow: 0 0 0 3px rgba(42,74,128,0.1);
-}
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-
-.btn { border: none; border-radius: 8px; padding: 11px 22px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 7px; }
-.btn-primary { background: var(--navy); color: white; }
-.btn-primary:hover { background: var(--navy-mid); box-shadow: var(--shadow-md); }
-.btn-secondary { background: var(--gray-100); color: var(--gray-800); }
-.btn-secondary:hover { background: var(--gray-200); }
-.btn-danger { background: var(--red-light); color: var(--red); }
-.btn-danger:hover { background: #f5c6cb; }
-.btn-success { background: var(--green-light); color: var(--green); }
-.btn-success:hover { background: #c3e6cb; }
-.btn-gold-solid { background: var(--gold); color: var(--navy); font-weight: 700; }
-.btn-gold-solid:hover { background: var(--gold-light); }
-.btn-sm { padding: 7px 14px; font-size: 12.5px; border-radius: 6px; }
-.btn-full { width: 100%; justify-content: center; padding: 13px; font-size: 15px; }
-
-/* TOAST */
-#toast {
-  position: fixed; bottom: 28px; right: 28px;
-  background: var(--navy); color: white;
-  padding: 14px 22px; border-radius: 10px;
-  font-size: 14px; font-weight: 500;
-  box-shadow: var(--shadow-lg);
-  transform: translateY(20px); opacity: 0;
-  transition: all 0.3s;
-  z-index: 9999; max-width: 340px;
-  display: flex; align-items: center; gap: 10px;
-  pointer-events: none;
-}
-#toast.show { transform: translateY(0); opacity: 1; }
-#toast.success { background: var(--green); }
-#toast.error { background: var(--red); }
-
-/* RESULT GRADE COLOURS */
-.g-a { color: #1a6b3a; font-weight: 700; }
-.g-b { color: #2471a3; font-weight: 700; }
-.g-c { color: #1a7a1a; font-weight: 700; }
-.g-d { color: #d68910; font-weight: 700; }
-.g-e { color: #cb4335; font-weight: 700; }
-.g-f { color: #922b21; font-weight: 700; }
-
-/* SCROLLBAR */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--gray-100); }
-::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 3px; }
-
-@media(max-width:768px){
-  .app-main { padding: 20px 16px; }
-  .form-row { grid-template-columns: 1fr; }
-  .sidebar { display: none; }
-}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--gray-800);min-height:100vh;font-size:15px;}
+#appShell{display:flex;min-height:100vh;flex-direction:column;}
+.app-topbar{background:var(--navy);padding:0 28px;height:64px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,0.2);}
+.topbar-brand{display:flex;align-items:center;gap:12px;}
+.topbar-crest{width:36px;height:36px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;}
+.topbar-brand span{font-family:'Playfair Display',serif;color:white;font-size:1.1rem;}
+.topbar-right{display:flex;align-items:center;gap:16px;}
+.user-chip{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.1);border-radius:30px;padding:6px 14px 6px 6px;}
+.user-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:var(--navy);background:var(--gold);}
+.user-chip .uname{color:white;font-size:13px;font-weight:500;}
+.user-chip .urole{color:rgba(255,255,255,0.5);font-size:11px;}
+.btn-logout{background:rgba(255,255,255,0.1);border:none;color:rgba(255,255,255,0.7);padding:8px 16px;border-radius:6px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;transition:all 0.2s;}
+.btn-logout:hover{background:rgba(255,255,255,0.2);color:white;}
+.app-layout{display:flex;flex:1;min-height:0;}
+.sidebar{width:220px;background:white;border-right:1px solid var(--gray-200);padding:24px 0;flex-shrink:0;overflow-y:auto;position:sticky;top:64px;height:calc(100vh - 64px);}
+.sidebar-section{padding:0 16px;margin-bottom:8px;}
+.sidebar-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gray-400);padding:0 8px;margin-bottom:6px;margin-top:16px;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:all 0.15s;color:var(--gray-600);font-size:14px;font-weight:500;border:none;background:none;width:100%;text-align:left;}
+.nav-item:hover{background:var(--gray-100);color:var(--navy);}
+.nav-item.active{background:var(--gold-pale);color:var(--navy);font-weight:600;}
+.nav-item.active .nav-icon{color:var(--gold);}
+.nav-icon{font-size:16px;width:20px;text-align:center;}
+.app-main{flex:1;padding:32px 36px;overflow-y:auto;}
+.page-section{display:none;}
+.page-section.active{display:block;}
+.page-title{font-family:'Playfair Display',serif;font-size:1.7rem;color:var(--navy);margin-bottom:6px;}
+.page-subtitle{color:var(--gray-400);font-size:0.88rem;margin-bottom:28px;}
+.card{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:28px;box-shadow:var(--shadow-sm);margin-bottom:24px;}
+.card-title{font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--navy);margin-bottom:20px;display:flex;align-items:center;gap:10px;}
+.card-title::before{content:'';display:block;width:4px;height:20px;background:var(--gold);border-radius:2px;}
+.table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--gray-200);}
+table{width:100%;border-collapse:collapse;font-size:13.5px;}
+thead th{background:var(--navy);color:white;padding:12px 14px;text-align:left;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;}
+tbody tr{border-bottom:1px solid var(--gray-200);transition:background 0.1s;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:var(--gray-100);}
+tbody td{padding:11px 14px;color:var(--gray-800);vertical-align:middle;}
+.action-cell{display:flex;gap:6px;flex-wrap:wrap;}
+.table-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px;}
+.search-input{padding:9px 14px 9px 36px;border:1.5px solid var(--gray-200);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:border-color 0.2s;width:240px;}
+.search-input:focus{border-color:var(--navy-light);}
+.search-wrap{position:relative;}
+.search-wrap::before{content:'🔍';position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none;}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(13,31,60,0.65);backdrop-filter:blur(4px);z-index:500;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.2s;}
+.modal-overlay.active{display:flex;}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+@keyframes slideUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+.modal-box{background:var(--white);border-radius:var(--radius-lg);width:100%;max-width:440px;box-shadow:var(--shadow-lg);animation:slideUp 0.25s;overflow:hidden;}
+.modal-box.wide{max-width:640px;}
+.modal-header{background:var(--navy);padding:28px 30px 22px;position:relative;}
+.modal-header .crest-sm{width:42px;height:42px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:12px;}
+.modal-header h2{font-family:'Playfair Display',serif;color:var(--white);font-size:1.4rem;}
+.modal-header p{color:rgba(255,255,255,0.55);font-size:0.85rem;margin-top:4px;}
+.modal-close{position:absolute;top:18px;right:20px;background:rgba(255,255,255,0.12);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;}
+.modal-close:hover{background:rgba(255,255,255,0.22);}
+.modal-body{padding:28px 30px;}
+.form-group{margin-bottom:18px;}
+.form-group label{display:block;font-weight:600;font-size:0.82rem;color:var(--gray-800);margin-bottom:6px;letter-spacing:0.3px;text-transform:uppercase;}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:11px 14px;border:1.5px solid var(--gray-200);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--gray-800);background:var(--white);transition:border-color 0.2s,box-shadow 0.2s;outline:none;}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--navy-light);box-shadow:0 0 0 3px rgba(42,74,128,0.1);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.btn{border:none;border-radius:8px;padding:11px 22px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:7px;}
+.btn-primary{background:var(--navy);color:white;}
+.btn-primary:hover{background:var(--navy-mid);box-shadow:var(--shadow-md);}
+.btn-secondary{background:var(--gray-100);color:var(--gray-800);}
+.btn-secondary:hover{background:var(--gray-200);}
+.btn-danger{background:var(--red-light);color:var(--red);}
+.btn-danger:hover{background:#f5c6cb;}
+.btn-success{background:var(--green-light);color:var(--green);}
+.btn-success:hover{background:#c3e6cb;}
+.btn-gold-solid{background:var(--gold);color:var(--navy);font-weight:700;}
+.btn-gold-solid:hover{background:var(--gold-light);}
+.btn-sm{padding:7px 14px;font-size:12.5px;border-radius:6px;}
+.btn-full{width:100%;justify-content:center;padding:13px;font-size:15px;}
+#toast{position:fixed;bottom:28px;right:28px;background:var(--navy);color:white;padding:14px 22px;border-radius:10px;font-size:14px;font-weight:500;box-shadow:var(--shadow-lg);transform:translateY(20px);opacity:0;transition:all 0.3s;z-index:9999;max-width:340px;display:flex;align-items:center;gap:10px;pointer-events:none;}
+#toast.show{transform:translateY(0);opacity:1;}
+#toast.success{background:var(--green);}
+#toast.error{background:var(--red);}
+.g-a{color:#1a6b3a;font-weight:700;}.g-b{color:#2471a3;font-weight:700;}.g-c{color:#1a7a1a;font-weight:700;}
+.g-d{color:#d68910;font-weight:700;}.g-e{color:#cb4335;font-weight:700;}.g-f{color:#922b21;font-weight:700;}
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:var(--gray-100);}
+::-webkit-scrollbar-thumb{background:var(--gray-200);border-radius:3px;}
+@media(max-width:768px){.app-main{padding:20px 16px;}.form-row{grid-template-columns:1fr;}.sidebar{display:none;}}
 </style>
 </head>
 <body>
-
-<!-- APP SHELL -->
 <div id="appShell">
   <div class="app-topbar">
     <div class="topbar-brand">
@@ -298,17 +115,12 @@ tbody td { padding: 11px 14px; color: var(--gray-800); vertical-align: middle; }
     <div class="topbar-right">
       <div class="user-chip">
         <div class="user-avatar" id="topAvatar"></div>
-        <div>
-          <div class="uname" id="topName">—</div>
-          <div class="urole" id="topRole">Teacher</div>
-        </div>
+        <div><div class="uname" id="topName">—</div><div class="urole" id="topRole">Teacher</div></div>
       </div>
       <button class="btn-logout" onclick="doLogout()">Sign Out</button>
     </div>
   </div>
-
   <div class="app-layout">
-    <!-- SIDEBAR -->
     <nav class="sidebar" id="sidebarNav">
       <div class="sidebar-section">
         <div class="sidebar-label">Work</div>
@@ -320,15 +132,12 @@ tbody td { padding: 11px 14px; color: var(--gray-800); vertical-align: middle; }
         <button class="nav-item" onclick="openModal('changePwdModal')"><span class="nav-icon">🔒</span> Change Password</button>
       </div>
     </nav>
-
-    <!-- MAIN -->
     <main class="app-main" id="appMain">
-      <!-- ENTER SCORES -->
       <div id="tsec-enter" class="page-section active">
         <div class="page-title">Enter Scores</div>
         <div class="page-subtitle">Select a student and add subject scores</div>
         <div class="card">
-          <div class="card-title">Select Student & Term</div>
+          <div class="card-title">Select Student &amp; Term</div>
           <div class="form-row">
             <div class="form-group">
               <label>Student</label>
@@ -339,9 +148,7 @@ tbody td { padding: 11px 14px; color: var(--gray-800); vertical-align: middle; }
             <div class="form-group">
               <label>Term</label>
               <select id="tsTerm" onchange="loadStudentScores()">
-                <option>First Term</option>
-                <option>Second Term</option>
-                <option>Third Term</option>
+                <option>First Term</option><option>Second Term</option><option>Third Term</option>
               </select>
             </div>
           </div>
@@ -351,7 +158,6 @@ tbody td { padding: 11px 14px; color: var(--gray-800); vertical-align: middle; }
           </div>
           <button class="btn btn-primary" onclick="loadStudentScores()">📂 Load / Create Sheet</button>
         </div>
-
         <div id="tsScoreCard" style="display:none">
           <div class="card">
             <div class="card-title" id="tsScoreTitle">Subject Scores</div>
@@ -371,17 +177,13 @@ tbody td { padding: 11px 14px; color: var(--gray-800); vertical-align: middle; }
           </div>
         </div>
       </div>
-
-      <!-- VIEW RESULTS -->
       <div id="tsec-tresults" class="page-section">
         <div class="page-title">View Results</div>
         <div class="page-subtitle">All score entries you have submitted</div>
         <div style="display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap;">
           <select id="tFilterTerm" style="padding:9px 14px;border:1.5px solid var(--gray-200);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:14px;" onchange="renderTeacherResultsTable()">
             <option value="">All Terms</option>
-            <option>First Term</option>
-            <option>Second Term</option>
-            <option>Third Term</option>
+            <option>First Term</option><option>Second Term</option><option>Third Term</option>
           </select>
           <div class="search-wrap"><input class="search-input" placeholder="Search student…" id="searchResults" onkeyup="renderTeacherResultsTable(this.value)"></div>
         </div>
@@ -422,48 +224,6 @@ tbody td { padding: 11px 14px; color: var(--gray-800); vertical-align: middle; }
   </div>
 </div>
 
-<!-- EDIT SCORE MODAL -->
-<div id="editScoreModal" class="modal-overlay">
-  <div class="modal-box wide">
-    <div class="modal-header">
-      <div class="crest-sm">✏️</div>
-      <h2>Edit Score</h2>
-      <p id="editScoreSubtitle">Update subject scores</p>
-      <button class="modal-close" onclick="closeModal('editScoreModal')">×</button>
-    </div>
-    <div class="modal-body">
-      <input type="hidden" id="editScoreStudentId">
-      <input type="hidden" id="editScoreSubjectOld">
-      <input type="hidden" id="editScoreTerm">
-      <input type="hidden" id="editScoreSession">
-      <div class="form-group"><label>Subject</label><input type="text" id="editScoreSubject"></div>
-      <div class="form-row">
-        <div class="form-group"><label>CA 1 (max 10)</label><input type="number" id="editScoreCA1" min="0" max="10" step="0.5"></div>
-        <div class="form-group"><label>CA 2 (max 10)</label><input type="number" id="editScoreCA2" min="0" max="10" step="0.5"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>CA 3 (max 10)</label><input type="number" id="editScoreCA3" min="0" max="10" step="0.5"></div>
-        <div class="form-group"><label>Exam (max 70)</label><input type="number" id="editScoreExam" min="0" max="70" step="0.5"></div>
-      </div>
-      <button class="btn btn-primary btn-full" onclick="saveEditScore()">Update Score</button>
-    </div>
-  </div>
-</div>
-
-<!-- VIEW RESULT MODAL -->
-<div id="viewResultModal" class="modal-overlay">
-  <div class="modal-box wide">
-    <div class="modal-header">
-      <div class="crest-sm">📋</div>
-      <h2>Result Sheet</h2>
-      <p id="vrSubtitle">Full academic record</p>
-      <button class="modal-close" onclick="closeModal('viewResultModal')">×</button>
-    </div>
-    <div class="modal-body" id="viewResultBody">
-    </div>
-  </div>
-</div>
-
 <!-- CHANGE PASSWORD MODAL -->
 <div id="changePwdModal" class="modal-overlay">
   <div class="modal-box">
@@ -482,42 +242,31 @@ tbody td { padding: 11px 14px; color: var(--gray-800); vertical-align: middle; }
   </div>
 </div>
 
-<!-- TOAST -->
 <div id="toast"></div>
 
 <script>
-/* =========================
-   API CONFIGURATION - FIXED
-   ========================= */
-const API_BASE = 'http://localhost:5000/api';
+// FIX: Use relative /api path, NOT http://localhost:5000/api.
+// The page is served from http://127.0.0.1:5000. Fetching to http://localhost:5000
+// is a DIFFERENT origin — the session cookie (issued to 127.0.0.1) is never
+// attached by the browser, so Cookie is always None and every call returns 401.
+// A relative path is always same-origin regardless of host/IP used to open the page.
+const API_BASE = '/api';
 
 async function apiCall(endpoint, options = {}) {
     const url = `${API_BASE}${endpoint}`;
     const defaultOptions = {
-        credentials: 'include',  // Important: sends cookies with request
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
     };
-    
     try {
         const response = await fetch(url, { ...defaultOptions, ...options });
-        
-        // Handle 401 Unauthorized - but don't redirect immediately for OPTIONS requests
         if (response.status === 401 && options.method !== 'OPTIONS') {
-            console.log('Session expired, redirecting to login');
-            window.location.href = '/login';
+            window.location.href = '/';
             throw new Error('Session expired');
         }
-
-        // For empty responses (like 204)
-        if (response.status === 204) {
-            return null;
-        }
-
+        if (response.status === 204) return null;
         const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.error || 'API call failed');
-        }
-
+        if (!response.ok) throw new Error(data.error || 'API call failed');
         return data;
     } catch (error) {
         console.error('API call error:', error);
@@ -525,189 +274,105 @@ async function apiCall(endpoint, options = {}) {
     }
 }
 
-/* =========================
-   AUTHENTICATION - FIXED
-   ========================= */
 let currentUser = null;
 
-document.addEventListener('DOMContentLoaded', () => {
-    initDashboard();
-});
+document.addEventListener('DOMContentLoaded', () => { initDashboard(); });
 
 async function initDashboard() {
     try {
-        // Check current user first
         const data = await apiCall('/current-user');
-
-        if (!data || !data.user) {
-            console.log('No user data, redirecting to login');
-            window.location.href = '/login';
-            return;
-        }
-
+        if (!data || !data.user) { window.location.href = '/'; return; }
         currentUser = data.user;
-        console.log('Current user:', currentUser);
-
-        // Verify role
-        if (!currentUser.role || currentUser.role.toLowerCase() !== 'teacher') {
-            console.warn('Unauthorized role:', currentUser.role);
-            window.location.href = '/login';
-            return;
-        }
-
-        // Populate UI
-        updateUserUI();
-        
-        // Load data
-        await loadStudentsIntoSelect();
-        await renderTeacherResultsTable();
-
-    } catch (err) {
-        console.error('Dashboard init error:', err);
-        // Only redirect if we're sure it's an auth error
-        if (err.message.includes('Session expired') || err.message.includes('Not logged in')) {
-            window.location.href = '/login';
-        }
-    }
-}
-
-function updateUserUI() {
-    if (currentUser) {
+        if (!currentUser.role || currentUser.role.toLowerCase() !== 'teacher') { window.location.href = '/'; return; }
         document.getElementById('topName').textContent = currentUser.name || currentUser.username;
         document.getElementById('topAvatar').textContent = (currentUser.name || currentUser.username).charAt(0).toUpperCase();
-        document.getElementById('topRole').textContent = currentUser.role || 'Teacher';
+        document.getElementById('topRole').textContent = 'Teacher';
+        await loadStudentsIntoSelect();
+        await renderTeacherResultsTable();
+    } catch (err) {
+        console.error('Dashboard init error:', err);
+        if (err.message.includes('Session expired') || err.message.includes('Not logged in')) {
+            window.location.href = '/';
+        }
     }
 }
 
 function doLogout() {
-    apiCall('/logout', { method: 'POST' })
-        .then(() => {
-            window.location.href = '/login';
-        })
-        .catch(() => {
-            window.location.href = '/login';
-        });
+    apiCall('/logout', { method: 'POST' }).finally(() => { window.location.href = '/'; });
 }
 
-/* =========================
-   SECTION MANAGEMENT
-   ========================= */
 function showSection(name, btn) {
     document.querySelectorAll('#appMain .page-section').forEach(s => s.classList.remove('active'));
     document.getElementById('tsec-' + name).classList.add('active');
-
     document.querySelectorAll('#sidebarNav .nav-item').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
-
     if (name === 'tresults') renderTeacherResultsTable();
 }
 
-/* =========================
-   STUDENT DROPDOWN
-   ========================= */
 async function loadStudentsIntoSelect() {
     try {
         const students = await apiCall('/students');
         const select = document.getElementById('tsStudent');
-        select.innerHTML = '<option value="">— Select student —</option>' + 
+        select.innerHTML = '<option value="">— Select student —</option>' +
             students.map(s => `<option value="${s.student_id}">${s.name} (${s.student_id}) — ${s.level || ''} ${s.arm || ''}</option>`).join('');
-    } catch (error) {
-        toast('Failed to load students', 'error');
-        console.error(error);
-    }
+    } catch (error) { toast('Failed to load students', 'error'); }
 }
 
-/* =========================
-   SCORE ENTRY & EDITING
-   ========================= */
 let activeTsStudentId = null, activeTsTerm = null, activeTsSession = null;
 
 async function loadStudentScores() {
     const sid = document.getElementById('tsStudent').value;
     const term = document.getElementById('tsTerm').value;
     const session = document.getElementById('tsSession').value.trim();
-
-    if (!sid || !session) {
-        document.getElementById('tsScoreCard').style.display = 'none';
-        return;
-    }
-
-    activeTsStudentId = sid;
-    activeTsTerm = term;
-    activeTsSession = session;
-
+    if (!sid || !session) { document.getElementById('tsScoreCard').style.display = 'none'; return; }
+    activeTsStudentId = sid; activeTsTerm = term; activeTsSession = session;
     try {
         const students = await apiCall('/students');
         const st = students.find(s => s.student_id === sid) || { name: 'Unknown', level: '', arm: '' };
-
         document.getElementById('tsScoreCard').style.display = 'block';
         document.getElementById('tsScoreTitle').textContent = `${term} — ${session}`;
         document.getElementById('tsStudentInfo').textContent = `${st.name} · ${st.level || ''} ${st.arm || ''} · ${sid}`;
-
         await renderTsScoreBody();
-    } catch (error) {
-        toast('Failed to load student data', 'error');
-    }
+    } catch (error) { toast('Failed to load student data', 'error'); }
 }
 
 async function renderTsScoreBody() {
     try {
-        const response = await fetch(`${API_BASE}/scores?student_id=${activeTsStudentId}&term=${encodeURIComponent(activeTsTerm)}&session=${encodeURIComponent(activeTsSession)}`, { 
-            credentials: 'include' 
-        });
-        
-        if (!response.ok) {
-            if (response.status === 401) {
-                window.location.href = '/login';
-                return;
-            }
-            throw new Error('Failed to load scores');
-        }
-
+        const response = await fetch(`${API_BASE}/scores?student_id=${activeTsStudentId}&term=${encodeURIComponent(activeTsTerm)}&session=${encodeURIComponent(activeTsSession)}`, { credentials: 'include' });
+        if (!response.ok) { if (response.status === 401) { window.location.href = '/'; return; } throw new Error('Failed'); }
         const scores = await response.json();
         const sheet = scores[0] || { subjects: [] };
         const subjs = sheet.subjects || [];
-
         document.getElementById('tsScoreBody').innerHTML = subjs.length === 0
             ? `<tr><td colspan="9" style="text-align:center;color:var(--gray-400);padding:24px;">No subjects added yet. Click "Add Subject".</td></tr>`
-            : subjs.map(s => `
-                <tr>
-                    <td><strong>${s.subject}</strong></td>
-                    <td>${s.ca1}</td><td>${s.ca2}</td><td>${s.ca3}</td><td>${s.exam}</td>
-                    <td><strong>${s.total}</strong></td>
-                    <td class="${gradeClass(s.grade)}">${s.grade}</td>
-                    <td>${remark(s.grade)}</td>
-                    <td><div class="action-cell">
-                        <button class="btn btn-sm btn-secondary" onclick="openEditScore('${activeTsStudentId}','${s.subject}','${activeTsTerm}','${activeTsSession}')">✏️ Edit</button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteSubjectScore('${activeTsStudentId}','${s.subject}','${activeTsTerm}','${activeTsSession}')">🗑</button>
-                    </div></td>
-                </tr>`).join('');
+            : subjs.map(s => `<tr>
+                <td><strong>${s.subject}</strong></td>
+                <td>${s.ca1}</td><td>${s.ca2}</td><td>${s.ca3}</td><td>${s.exam}</td>
+                <td><strong>${s.total}</strong></td>
+                <td class="${gradeClass(s.grade)}">${s.grade}</td>
+                <td>${remark(s.grade)}</td>
+                <td><div class="action-cell">
+                    <button class="btn btn-sm btn-danger" onclick="deleteSubjectScore('${activeTsStudentId}','${s.subject}','${activeTsTerm}','${activeTsSession}')">🗑</button>
+                </div></td>
+            </tr>`).join('');
     } catch (error) {
-        console.error('Failed to load scores:', error);
-        document.getElementById('tsScoreBody').innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--red);padding:24px;">Failed to load scores. Please try again.</td></tr>`;
+        document.getElementById('tsScoreBody').innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--red);padding:24px;">Failed to load scores.</td></tr>`;
     }
 }
 
 function openEnterScore() {
     if (!activeTsStudentId) return toast('Select a student first', 'error');
-
-    ['scoreSubject', 'scoreCA1', 'scoreCA2', 'scoreCA3', 'scoreExam'].forEach(id => document.getElementById(id).value = '');
+    ['scoreSubject','scoreCA1','scoreCA2','scoreCA3','scoreExam'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('scorePreview').style.display = 'none';
     document.getElementById('enterScoreSubtitle').textContent = `${activeTsStudentId} · ${activeTsTerm} ${activeTsSession}`;
     openModal('enterScoreModal');
-
-    ['scoreCA1','scoreCA2','scoreCA3','scoreExam'].forEach(id => {
-        document.getElementById(id).oninput = updateScorePreview;
-    });
+    ['scoreCA1','scoreCA2','scoreCA3','scoreExam'].forEach(id => { document.getElementById(id).oninput = updateScorePreview; });
 }
 
 function updateScorePreview() {
-    const ca1 = +document.getElementById('scoreCA1').value || 0;
-    const ca2 = +document.getElementById('scoreCA2').value || 0;
-    const ca3 = +document.getElementById('scoreCA3').value || 0;
-    const ex = +document.getElementById('scoreExam').value || 0;
-    const total = ca1 + ca2 + ca3 + ex;
-    const grade = calcGrade(total);
+    const ca1 = +document.getElementById('scoreCA1').value||0, ca2 = +document.getElementById('scoreCA2').value||0;
+    const ca3 = +document.getElementById('scoreCA3').value||0, ex = +document.getElementById('scoreExam').value||0;
+    const total = ca1+ca2+ca3+ex, grade = calcGrade(total);
     const prev = document.getElementById('scorePreview');
     prev.style.display = 'block';
     prev.innerHTML = `<strong>Preview:</strong> Total = <strong>${total}/100</strong> | Grade: <strong class="${gradeClass(grade)}">${grade}</strong> | ${remark(grade)}`;
@@ -715,194 +380,84 @@ function updateScorePreview() {
 
 async function saveScore() {
     const subj = document.getElementById('scoreSubject').value.trim();
-    const ca1 = parseFloat(document.getElementById('scoreCA1').value) || 0;
-    const ca2 = parseFloat(document.getElementById('scoreCA2').value) || 0;
-    const ca3 = parseFloat(document.getElementById('scoreCA3').value) || 0;
-    const exam = parseFloat(document.getElementById('scoreExam').value) || 0;
-    const total = ca1 + ca2 + ca3 + exam;
-    const grade = calcGrade(total);
-
-    if (!subj) return toast('Enter a subject name', 'error');
-    if (ca1 > 10 || ca2 > 10 || ca3 > 10) return toast('CA scores must be 0–10', 'error');
-    if (exam > 70) return toast('Exam score must be 0–70', 'error');
-    if (total > 100) return toast('Total cannot exceed 100', 'error');
-
-    const payload = { 
-        student_id: activeTsStudentId, 
-        term: activeTsTerm, 
-        session: activeTsSession, 
-        subject: subj, 
-        ca1, ca2, ca3, exam,
-        total,
-        grade
-    };
-
+    const ca1 = parseFloat(document.getElementById('scoreCA1').value)||0;
+    const ca2 = parseFloat(document.getElementById('scoreCA2').value)||0;
+    const ca3 = parseFloat(document.getElementById('scoreCA3').value)||0;
+    const exam = parseFloat(document.getElementById('scoreExam').value)||0;
+    const total = ca1+ca2+ca3+exam, grade = calcGrade(total);
+    if (!subj) return toast('Enter a subject name','error');
+    if (ca1>10||ca2>10||ca3>10) return toast('CA scores must be 0–10','error');
+    if (exam>70) return toast('Exam score must be 0–70','error');
+    if (total>100) return toast('Total cannot exceed 100','error');
     try {
-        await apiCall('/scores', { method:'POST', body: JSON.stringify(payload) });
+        await apiCall('/scores', { method:'POST', body: JSON.stringify({ student_id:activeTsStudentId, term:activeTsTerm, session:activeTsSession, subject:subj, ca1, ca2, ca3, exam, total, grade }) });
         closeModal('enterScoreModal');
         await loadStudentScores();
         toast('Score saved successfully','success');
-    } catch(err) {
-        toast(err.message || 'Failed to save score','error');
-    }
+    } catch(err) { toast(err.message||'Failed to save score','error'); }
 }
 
-function openEditScore(student_id, subject, term, session) {
-    // Implementation for editing
-    toast('Edit functionality coming soon', 'info');
+async function deleteSubjectScore(student_id, subject, term, session) {
+    if (!confirm('Delete this score?')) return;
+    try {
+        await apiCall('/scores/delete', { method:'POST', body: JSON.stringify({ student_id, subject, term, session }) });
+        await loadStudentScores();
+        toast('Score deleted','success');
+    } catch(err) { toast(err.message||'Failed to delete','error'); }
 }
 
-function deleteSubjectScore(student_id, subject, term, session) {
-    if (confirm('Delete this score?')) {
-        // Implementation for delete
-        toast('Delete functionality coming soon', 'info');
-    }
-}
-
-/* =========================
-   RESULTS TABLE - FIXED
-   ========================= */
 async function renderTeacherResultsTable(search='') {
     try {
         const term = document.getElementById('tFilterTerm').value;
         const url = term ? `/teacher-results?term=${encodeURIComponent(term)}` : '/teacher-results';
         const results = await apiCall(url);
-        
-        const filtered = search ? results.filter(r => 
-            r.name.toLowerCase().includes(search.toLowerCase()) || 
+        const filtered = search ? results.filter(r =>
+            r.name.toLowerCase().includes(search.toLowerCase()) ||
             r.student_id.toLowerCase().includes(search.toLowerCase())
         ) : results;
-        
         const tbody = document.getElementById('tResultsBody');
-        
         if (!filtered || filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--gray-400);padding:24px;">No results found</td></tr>';
-            return;
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--gray-400);padding:24px;">No results found</td></tr>'; return;
         }
-        
         tbody.innerHTML = filtered.map(r => `<tr>
-            <td>${r.student_id}</td>
-            <td>${r.name}</td>
-            <td>${r.level || ''} ${r.arm || ''}</td>
-            <td>${r.term}</td>
-            <td>${r.session}</td>
-            <td>${r.subjects?.length || 0}</td>
-            <td>${r.average || '-'}</td>
-            <td>
-                <button class="btn btn-sm btn-secondary" onclick="viewResult('${r.student_id}','${r.term}','${r.session}')">📋 View</button>
-            </td>
+            <td>${r.student_id}</td><td>${r.name}</td><td>${r.level||''} ${r.arm||''}</td>
+            <td>${r.term}</td><td>${r.session}</td><td>${r.subjects?.length||0}</td><td>${r.average||'-'}</td>
+            <td><button class="btn btn-sm btn-secondary" onclick="viewResult('${r.student_id}','${r.term}','${r.session}')">📋 View</button></td>
         </tr>`).join('');
     } catch(err) {
-        console.error('Failed to load results:', err);
         document.getElementById('tResultsBody').innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--red);padding:24px;">Failed to load results</td></tr>';
     }
 }
 
-function viewResult(student_id, term, session) {
-    toast(`Viewing result for ${student_id} - ${term} ${session}`, 'info');
-    // Implementation for viewing full result
-}
+function viewResult(student_id, term, session) { toast(`Viewing result for ${student_id} - ${term} ${session}`, 'info'); }
+function downloadTeacherExcel() { toast('Excel download coming soon','info'); }
 
-function downloadTeacherExcel() {
-    toast('Excel download coming soon', 'info');
-}
-
-/* =========================
-   CHANGE PASSWORD
-   ========================= */
 async function doChangePwd() {
-    const old = document.getElementById('cpOld').value;
-    const nw = document.getElementById('cpNew').value;
-    const conf = document.getElementById('cpConfirm').value;
-
-    if (!old || !nw || !conf) { 
-        toast('Fill all fields', 'error'); 
-        return; 
-    }
-    
-    if (nw !== conf) { 
-        toast('New passwords do not match', 'error'); 
-        return; 
-    }
-    
-    if (nw.length < 6) { 
-        toast('Password must be at least 6 characters', 'error'); 
-        return; 
-    }
-
+    const old = document.getElementById('cpOld').value, nw = document.getElementById('cpNew').value, conf = document.getElementById('cpConfirm').value;
+    if (!old||!nw||!conf) { toast('Fill all fields','error'); return; }
+    if (nw !== conf) { toast('New passwords do not match','error'); return; }
+    if (nw.length < 6) { toast('Password must be at least 6 characters','error'); return; }
     try {
-        await apiCall('/change-password', {
-            method: 'POST',
-            body: JSON.stringify({ old_password: old, new_password: nw })
-        });
-
-        toast('Password changed!', 'success');
-        closeModal('changePwdModal');
-        document.getElementById('cpOld').value = '';
-        document.getElementById('cpNew').value = '';
-        document.getElementById('cpConfirm').value = '';
-    } catch (error) {
-        toast(error.message, 'error');
-    }
+        await apiCall('/change-password', { method:'POST', body: JSON.stringify({ old_password:old, new_password:nw }) });
+        toast('Password changed!','success'); closeModal('changePwdModal');
+        ['cpOld','cpNew','cpConfirm'].forEach(id => document.getElementById(id).value = '');
+    } catch(error) { toast(error.message,'error'); }
 }
 
-/* =========================
-   HELPER FUNCTIONS
-   ========================= */
-function calcGrade(total) {
-    if (total >= 70 && total <= 100) return 'A';
-    if (total >= 60 && total <= 69) return 'B';
-    if (total >= 50 && total <= 59) return 'C';
-    if (total >= 45 && total <= 49) return 'D';
-    if (total >= 40 && total <= 44) return 'E';
-    if (total >= 1 && total <= 39) return 'F';
-    return '';
+function calcGrade(t) {
+    if(t>=70)return'A';if(t>=60)return'B';if(t>=50)return'C';if(t>=45)return'D';if(t>=40)return'E';if(t>=1)return'F';return'';
 }
-
-function gradeClass(g) {
-    if (!g) return '';
-    if (g === 'A') return 'g-a';
-    if (g === 'B') return 'g-b';
-    if (g === 'C') return 'g-c';
-    if (g === 'D') return 'g-d';
-    if (g === 'E') return 'g-e';
-    if (g === 'F') return 'g-f';
-    return '';
-}
-
-function remark(g) {
-    if (!g) return '';
-    const map = {
-        'A': 'Excellent',
-        'B': 'Very Good',
-        'C': 'Good',
-        'D': 'Pass',
-        'E': 'Pass',
-        'F': 'Fail'
-    };
-    return map[g] || '';
-}
-
-function openModal(id) {
-    document.getElementById(id).classList.add('active');
-}
-
-function closeModal(id) {
-    document.getElementById(id).classList.remove('active');
-}
-
-function toast(msg, type = '') {
+function gradeClass(g) { const m={A:'g-a',B:'g-b',C:'g-c',D:'g-d',E:'g-e',F:'g-f'}; return m[g]||''; }
+function remark(g) { const m={A:'Excellent',B:'Very Good',C:'Good',D:'Pass',E:'Pass',F:'Fail'}; return m[g]||''; }
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+function toast(msg, type='') {
     const el = document.getElementById('toast');
-    el.textContent = (type === 'success' ? '✅ ' : type === 'error' ? '❌ ' : 'ℹ️ ') + msg;
-    el.className = 'show ' + (type || '');
-    clearTimeout(el._t);
-    el._t = setTimeout(() => el.className = '', 3500);
+    el.textContent = (type==='success'?'✅ ':type==='error'?'❌ ':'ℹ️ ')+msg;
+    el.className = 'show '+(type||''); clearTimeout(el._t);
+    el._t = setTimeout(()=>el.className='',3500);
 }
-
-// Close modals on overlay click
-document.querySelectorAll('.modal-overlay').forEach(o => {
-    o.addEventListener('click', e => { if (e.target === o) o.classList.remove('active'); });
-});
+document.querySelectorAll('.modal-overlay').forEach(o => { o.addEventListener('click', e => { if(e.target===o) o.classList.remove('active'); }); });
 </script>
 </body>
 </html>
