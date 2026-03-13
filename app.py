@@ -1263,19 +1263,23 @@ def internal_error(error):
     return render_template('index.html'), 500
 
 # --------------------------
-# Run server
+# Initialize database
+# --------------------------
+# Called at module level so it runs under BOTH:
+#   - gunicorn (Render): imports this module directly; __main__ block never runs
+#   - python app.py (local dev): also runs here, before the __main__ block below
+print("🚀 Davis Academy Portal Starting...")
+print(f"Python version: {sys.version}")
+print(f"Session directory: {app.config['SESSION_FILE_DIR']}")
+print(f"Database path: {DB_PATH}")
+init_db()
+
+# --------------------------
+# Run server (local dev only)
 # --------------------------
 if __name__ == '__main__':
-    print("🚀 Davis Academy Portal Starting...")
-    print(f"Python version: {sys.version}")
-    print(f"Session directory: {app.config['SESSION_FILE_DIR']}")
-    print(f"Database path: {DB_PATH}")
-
-    # Initialize database
-    init_db()
-
-    # Run app
     if os.environ.get('RENDER'):
+        # Should not reach here on Render (gunicorn is used), but just in case:
         port = int(os.environ.get('PORT', 10000))
         app.run(debug=False, host='0.0.0.0', port=port)
     else:
