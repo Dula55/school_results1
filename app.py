@@ -19,9 +19,17 @@ from flask_session import Session
 # --------------------------
 sqlite3.register_converter("timestamp", lambda b: b.decode('utf-8') if b else None)
 
+# Get the base directory for the application
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Use /tmp for database in production (Render uses ephemeral filesystem)
+if os.environ.get('RENDER'):
+    DB_PATH = '/tmp/davis_academy.db'
+else:
+    DB_PATH = os.path.join(BASE_DIR, 'davis_academy.db')
+
 def get_db():
     try:
-        db = sqlite3.connect('davis_academy.db', timeout=10)
+        db = sqlite3.connect(DB_PATH, timeout=10)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys = ON")
         return db
@@ -42,12 +50,15 @@ def generate_random_password():
 # Flask app
 # --------------------------
 app = Flask(__name__, template_folder="templates", static_folder="static")
-app.config['SECRET_KEY'] = 'your-secret-key-here-change-in-production'
+
+# Use environment variables for production
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-here-change-in-production')
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_PERMANENT'] = True
 app.config['SESSION_USE_SIGNER'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
+# Set secure cookies in production
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'False').lower() == 'true'
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_DOMAIN'] = None
 app.config['SESSION_COOKIE_NAME'] = 'school_session'
@@ -57,11 +68,18 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
 # Critical: Ensure session is saved on every request
 app.config['SESSION_COOKIE_PATH'] = '/'
 
-# Allowed origins for CORS
+# Allowed origins for CORS - Update for production
 ALLOWED_ORIGINS = {
     "http://localhost:5000",
     "http://127.0.0.1:5000",
 }
+
+# Add Render.com domain if in production
+if os.environ.get('RENDER'):
+    render_url = os.environ.get('RENDER_EXTERNAL_URL')
+    if render_url:
+        ALLOWED_ORIGINS.add(render_url)
+        ALLOWED_ORIGINS.add(render_url.replace('https://', 'http://'))
 
 # Initialize extensions
 Session(app)
@@ -79,9 +97,11 @@ CORS(app,
 def init_db():
     conn = None
     try:
-        db_exists = os.path.exists('davis_academy.db')
+        db_exists = os.path.exists(DB_PATH)
         if db_exists:
-            print("📁 Using existing database...")
+            print(f"📁 Using existing database at {DB_PATH}")
+        else:
+            print(f"📁 Creating new database at {DB_PATH}")
 
         conn = get_db()
         c = conn.cursor()
@@ -139,30 +159,30 @@ def init_db():
 
         now = datetime.now().isoformat()
 
-        # default admin
-        c.execute("SELECT COUNT(*) as count FROM admins WHERE username = ?", ('admin',))
+        # default admin - check if any admin exists
+        c.execute("SELECT COUNT(*) as count FROM admins")
         if c.fetchone()['count'] == 0:
-            admin_password = hash_password('admin123')
+            admin_password = hash_password(os.environ.get('DEFAULT_ADMIN_PASSWORD', 'admin123'))
             c.execute('''
                 INSERT INTO admins (username, password, name, role, created_at)
                 VALUES (?, ?, ?, ?, ?)
             ''', ('admin', admin_password, 'System Administrator', 'admin', now))
             print("✅ Default admin created")
 
-        # default teacher
-        c.execute("SELECT COUNT(*) as count FROM teachers WHERE username = ?", ('john.doe',))
+        # default teacher - check if any teacher exists
+        c.execute("SELECT COUNT(*) as count FROM teachers")
         if c.fetchone()['count'] == 0:
-            teacher_password = hash_password('teacher123')
+            teacher_password = hash_password(os.environ.get('DEFAULT_TEACHER_PASSWORD', 'teacher123'))
             c.execute('''
                 INSERT INTO teachers (username, password, name, email, subject, phone, role, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', ('john.doe', teacher_password, 'John Doe', 'john.doe@davis.edu', 'Mathematics', '555-0100', 'teacher', now))
             print("✅ Default teacher created")
 
-        # default student
-        c.execute("SELECT COUNT(*) as count FROM students WHERE username = ?", ('jane.smith',))
+        # default student - check if any student exists
+        c.execute("SELECT COUNT(*) as count FROM students")
         if c.fetchone()['count'] == 0:
-            student_password = hash_password('student123')
+            student_password = hash_password(os.environ.get('DEFAULT_STUDENT_PASSWORD', 'student123'))
             student_id = generate_user_id('STU')
             c.execute('''
                 INSERT INTO students (username, password, name, student_id, level, arm, phone, role, created_at)
@@ -194,14 +214,14 @@ def verify_data(conn):
 # --------------------------
 @app.before_request
 def before_request():
-    # Log session for debugging
-    if request.path.startswith('/api/'):
+    # Log session for debugging (only in development)
+    if not os.environ.get('RENDER') and request.path.startswith('/api/'):
         print(f"Session before {request.path}: {dict(session)}")
 
 @app.after_request
 def after_request(response):
-    # Log session after request
-    if request.path.startswith('/api/'):
+    # Log session after request (only in development)
+    if not os.environ.get('RENDER') and request.path.startswith('/api/'):
         print(f"Session after {request.path}: {dict(session)}")
     
     # Set CORS headers for all responses
@@ -295,7 +315,8 @@ def get_current_user():
         response = make_response('', 204)
         return response
 
-    print(f"Current session in /api/current-user: {dict(session)}")
+    if not os.environ.get('RENDER'):
+        print(f"Current session in /api/current-user: {dict(session)}")
     
     if 'user_id' in session and 'role' in session:
         # Get additional user data from database
@@ -877,7 +898,8 @@ def login():
         # Force session save
         session.modified = True
 
-        print(f"Session after login: {dict(session)}")
+        if not os.environ.get('RENDER'):
+            print(f"Session after login: {dict(session)}")
 
         redirect_url = {
             'admin': '/admin_dashboard',
@@ -911,7 +933,8 @@ def check_session():
     if request.method == 'OPTIONS':
         return make_response('', 204)
     
-    print(f"Session in check-session: {dict(session)}")
+    if not os.environ.get('RENDER'):
+        print(f"Session in check-session: {dict(session)}")
     
     if 'user_id' in session:
         return jsonify({
@@ -979,6 +1002,10 @@ def change_password():
 # --------------------------
 @app.route('/api/debug/users', methods=['GET'])
 def debug_users():
+    # Only allow debug in development or with special token
+    if os.environ.get('RENDER') and not os.environ.get('DEBUG_ENABLED'):
+        return jsonify({'error': 'Debug endpoint disabled in production'}), 403
+    
     try:
         conn = get_db()
         c = conn.cursor()
@@ -1002,6 +1029,21 @@ def debug_users():
         return jsonify({'error': str(e)}), 500
 
 # --------------------------
+# Health check endpoint for Render
+# --------------------------
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for Render.com"""
+    try:
+        # Test database connection
+        conn = get_db()
+        conn.execute("SELECT 1").fetchone()
+        conn.close()
+        return jsonify({'status': 'healthy', 'database': 'connected'}), 200
+    except Exception as e:
+        return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
+
+# --------------------------
 # Error handlers
 # --------------------------
 @app.errorhandler(404)
@@ -1013,6 +1055,7 @@ def not_found_error(error):
 @app.errorhandler(500)
 def internal_error(error):
     print(f"Internal server error: {error}")
+    traceback.print_exc()
     if request.path.startswith('/api/'):
         return jsonify({'error': 'Internal server error'}), 500
     return render_template('index.html'), 500
@@ -1022,14 +1065,34 @@ def internal_error(error):
 # --------------------------
 if __name__ == '__main__':
     print("🚀 Davis Academy Portal Starting...")
+    
+    # Initialize database
     init_db()
-    print("\n" + "="*50)
-    print("📍 Server: http://localhost:5000")
-    print("📍 Welcome page: http://localhost:5000")
-    print("📍 Debug users: http://localhost:5000/api/debug/users")
-    print("\n🔑 Default credentials:")
-    print("   - Admin: admin / admin123")
-    print("   - Teacher: john.doe / teacher123")
-    print("   - Student: jane.smith / student123")
-    print("="*50 + "\n")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    
+    # Check if running on Render
+    if os.environ.get('RENDER'):
+        print("📡 Running on Render.com")
+        port = int(os.environ.get('PORT', 10000))
+        print(f"\n" + "="*50)
+        print(f"📍 Server will start on port {port}")
+        print("📍 Make sure to set these environment variables in Render:")
+        print("   - SECRET_KEY: (set a secure random string)")
+        print("   - SESSION_COOKIE_SECURE: True")
+        print("   - DEFAULT_ADMIN_PASSWORD: (optional)")
+        print("   - DEFAULT_TEACHER_PASSWORD: (optional)")
+        print("   - DEFAULT_STUDENT_PASSWORD: (optional)")
+        print("="*50 + "\n")
+        
+        # Production settings for Render
+        app.run(debug=False, host='0.0.0.0', port=port)
+    else:
+        print("\n" + "="*50)
+        print("📍 Server: http://localhost:5000")
+        print("📍 Welcome page: http://localhost:5000")
+        print("📍 Debug users: http://localhost:5000/api/debug/users")
+        print("\n🔑 Default credentials:")
+        print("   - Admin: admin / admin123")
+        print("   - Teacher: john.doe / teacher123")
+        print("   - Student: jane.smith / student123")
+        print("="*50 + "\n")
+        app.run(debug=True, host='0.0.0.0', port=5000)
