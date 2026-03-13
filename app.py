@@ -4,6 +4,7 @@ import sqlite3
 import hashlib
 import secrets
 import traceback
+import sys
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -29,12 +30,20 @@ else:
 
 def get_db():
     try:
-        db = sqlite3.connect(DB_PATH, timeout=10)
+        # Ensure the directory exists
+        db_dir = os.path.dirname(DB_PATH)
+        if db_dir and not os.path.exists(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
+            
+        db = sqlite3.connect(DB_PATH, timeout=30)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys = ON")
+        db.execute("PRAGMA journal_mode = WAL")  # Better concurrency
+        db.execute("PRAGMA busy_timeout = 5000")  # Wait up to 5 seconds for locks
         return db
     except Exception as e:
         print(f"Database connection error: {e}")
+        traceback.print_exc()
         raise
 
 def hash_password(password):
@@ -52,7 +61,7 @@ def generate_random_password():
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
 # Use environment variables for production
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-here-change-in-production')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_PERMANENT'] = True
 app.config['SESSION_USE_SIGNER'] = True
@@ -64,6 +73,10 @@ app.config['SESSION_COOKIE_DOMAIN'] = None
 app.config['SESSION_COOKIE_NAME'] = 'school_session'
 app.config['SESSION_REFRESH_EACH_REQUEST'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
+app.config['SESSION_FILE_DIR'] = '/tmp/flask_session' if os.environ.get('RENDER') else './flask_session'
+
+# Create session directory
+os.makedirs(app.config['SESSION_FILE_DIR'], exist_ok=True)
 
 # Critical: Ensure session is saved on every request
 app.config['SESSION_COOKIE_PATH'] = '/'
@@ -80,6 +93,12 @@ if os.environ.get('RENDER'):
     if render_url:
         ALLOWED_ORIGINS.add(render_url)
         ALLOWED_ORIGINS.add(render_url.replace('https://', 'http://'))
+    
+    # Also add the *.onrender.com domain
+    render_service = os.environ.get('RENDER_SERVICE_NAME', '')
+    if render_service:
+        ALLOWED_ORIGINS.add(f"https://{render_service}.onrender.com")
+        ALLOWED_ORIGINS.add(f"http://{render_service}.onrender.com")
 
 # Initialize extensions
 Session(app)
@@ -88,7 +107,7 @@ Session(app)
 CORS(app, 
      supports_credentials=True, 
      origins=list(ALLOWED_ORIGINS),
-     allow_headers=['Content-Type', 'Authorization'],
+     allow_headers=['Content-Type', 'Authorization', 'X-Requested-With'],
      methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
 
 # --------------------------
@@ -96,109 +115,123 @@ CORS(app,
 # --------------------------
 def init_db():
     conn = None
-    try:
-        db_exists = os.path.exists(DB_PATH)
-        if db_exists:
-            print(f"📁 Using existing database at {DB_PATH}")
-        else:
-            print(f"📁 Creating new database at {DB_PATH}")
+    max_retries = 3
+    retry_count = 0
+    
+    while retry_count < max_retries:
+        try:
+            db_exists = os.path.exists(DB_PATH)
+            if db_exists:
+                print(f"📁 Using existing database at {DB_PATH}")
+            else:
+                print(f"📁 Creating new database at {DB_PATH}")
 
-        conn = get_db()
-        c = conn.cursor()
+            conn = get_db()
+            c = conn.cursor()
 
-        c.execute('''CREATE TABLE IF NOT EXISTS admins (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            name TEXT,
-            role TEXT DEFAULT 'admin',
-            created_at TEXT
-        )''')
+            # Create tables
+            c.execute('''CREATE TABLE IF NOT EXISTS admins (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                name TEXT,
+                role TEXT DEFAULT 'admin',
+                created_at TEXT
+            )''')
 
-        c.execute('''CREATE TABLE IF NOT EXISTS teachers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            name TEXT,
-            email TEXT,
-            subject TEXT,
-            phone TEXT,
-            role TEXT DEFAULT 'teacher',
-            created_at TEXT
-        )''')
+            c.execute('''CREATE TABLE IF NOT EXISTS teachers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                name TEXT,
+                email TEXT,
+                subject TEXT,
+                phone TEXT,
+                role TEXT DEFAULT 'teacher',
+                created_at TEXT
+            )''')
 
-        c.execute('''CREATE TABLE IF NOT EXISTS students (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            name TEXT,
-            student_id TEXT UNIQUE,
-            level TEXT,
-            arm TEXT,
-            phone TEXT,
-            role TEXT DEFAULT 'student',
-            created_at TEXT
-        )''')
+            c.execute('''CREATE TABLE IF NOT EXISTS students (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                name TEXT,
+                student_id TEXT UNIQUE,
+                level TEXT,
+                arm TEXT,
+                phone TEXT,
+                role TEXT DEFAULT 'student',
+                created_at TEXT
+            )''')
 
-        c.execute('''CREATE TABLE IF NOT EXISTS scores (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            student_id TEXT,
-            term TEXT,
-            session TEXT,
-            subject TEXT,
-            ca1 INTEGER DEFAULT 0,
-            ca2 INTEGER DEFAULT 0,
-            ca3 INTEGER DEFAULT 0,
-            exam INTEGER DEFAULT 0,
-            total INTEGER DEFAULT 0,
-            grade TEXT,
-            created_at TEXT,
-            updated_at TEXT,
-            UNIQUE(student_id, term, session, subject)
-        )''')
+            c.execute('''CREATE TABLE IF NOT EXISTS scores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id TEXT,
+                term TEXT,
+                session TEXT,
+                subject TEXT,
+                ca1 INTEGER DEFAULT 0,
+                ca2 INTEGER DEFAULT 0,
+                ca3 INTEGER DEFAULT 0,
+                exam INTEGER DEFAULT 0,
+                total INTEGER DEFAULT 0,
+                grade TEXT,
+                created_at TEXT,
+                updated_at TEXT,
+                UNIQUE(student_id, term, session, subject)
+            )''')
 
-        now = datetime.now().isoformat()
+            now = datetime.now().isoformat()
 
-        # default admin - check if any admin exists
-        c.execute("SELECT COUNT(*) as count FROM admins")
-        if c.fetchone()['count'] == 0:
-            admin_password = hash_password(os.environ.get('DEFAULT_ADMIN_PASSWORD', 'admin123'))
-            c.execute('''
-                INSERT INTO admins (username, password, name, role, created_at)
-                VALUES (?, ?, ?, ?, ?)
-            ''', ('admin', admin_password, 'System Administrator', 'admin', now))
-            print("✅ Default admin created")
+            # Check and create default admin if none exists
+            c.execute("SELECT COUNT(*) as count FROM admins")
+            if c.fetchone()['count'] == 0:
+                admin_password = hash_password(os.environ.get('DEFAULT_ADMIN_PASSWORD', 'admin123'))
+                c.execute('''
+                    INSERT INTO admins (username, password, name, role, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', ('admin', admin_password, 'System Administrator', 'admin', now))
+                print("✅ Default admin created")
 
-        # default teacher - check if any teacher exists
-        c.execute("SELECT COUNT(*) as count FROM teachers")
-        if c.fetchone()['count'] == 0:
-            teacher_password = hash_password(os.environ.get('DEFAULT_TEACHER_PASSWORD', 'teacher123'))
-            c.execute('''
-                INSERT INTO teachers (username, password, name, email, subject, phone, role, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', ('john.doe', teacher_password, 'John Doe', 'john.doe@davis.edu', 'Mathematics', '555-0100', 'teacher', now))
-            print("✅ Default teacher created")
+            # Check and create default teacher if none exists
+            c.execute("SELECT COUNT(*) as count FROM teachers")
+            if c.fetchone()['count'] == 0:
+                teacher_password = hash_password(os.environ.get('DEFAULT_TEACHER_PASSWORD', 'teacher123'))
+                c.execute('''
+                    INSERT INTO teachers (username, password, name, email, subject, phone, role, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', ('john.doe', teacher_password, 'John Doe', 'john.doe@davis.edu', 'Mathematics', '555-0100', 'teacher', now))
+                print("✅ Default teacher created")
 
-        # default student - check if any student exists
-        c.execute("SELECT COUNT(*) as count FROM students")
-        if c.fetchone()['count'] == 0:
-            student_password = hash_password(os.environ.get('DEFAULT_STUDENT_PASSWORD', 'student123'))
-            student_id = generate_user_id('STU')
-            c.execute('''
-                INSERT INTO students (username, password, name, student_id, level, arm, phone, role, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', ('jane.smith', student_password, 'Jane Smith', student_id, 'SS3', 'A', '555-0200', 'student', now))
-            print("✅ Default student created")
+            # Check and create default student if none exists
+            c.execute("SELECT COUNT(*) as count FROM students")
+            if c.fetchone()['count'] == 0:
+                student_password = hash_password(os.environ.get('DEFAULT_STUDENT_PASSWORD', 'student123'))
+                student_id = generate_user_id('STU')
+                c.execute('''
+                    INSERT INTO students (username, password, name, student_id, level, arm, phone, role, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', ('jane.smith', student_password, 'Jane Smith', student_id, 'SS3', 'A', '555-0200', 'student', now))
+                print("✅ Default student created")
 
-        conn.commit()
-        print("✅ Database initialized successfully")
-        verify_data(conn)
-    except Exception as e:
-        print(f"❌ Database initialization error: {e}")
-        traceback.print_exc()
-    finally:
-        if conn:
-            conn.close()
+            conn.commit()
+            print("✅ Database initialized successfully")
+            verify_data(conn)
+            break  # Success, exit retry loop
+            
+        except Exception as e:
+            retry_count += 1
+            print(f"❌ Database initialization error (attempt {retry_count}/{max_retries}): {e}")
+            traceback.print_exc()
+            if retry_count >= max_retries:
+                print("❌ Failed to initialize database after multiple attempts")
+            else:
+                print(f"Retrying in 2 seconds...")
+                import time
+                time.sleep(2)
+        finally:
+            if conn:
+                conn.close()
 
 def verify_data(conn):
     c = conn.cursor()
@@ -217,6 +250,9 @@ def before_request():
     # Log session for debugging (only in development)
     if not os.environ.get('RENDER') and request.path.startswith('/api/'):
         print(f"Session before {request.path}: {dict(session)}")
+    
+    # Make session permanent
+    session.permanent = True
 
 @app.after_request
 def after_request(response):
@@ -226,12 +262,14 @@ def after_request(response):
     
     # Set CORS headers for all responses
     origin = request.headers.get('Origin')
-    if origin and origin in ALLOWED_ORIGINS:
-        response.headers['Access-Control-Allow-Origin'] = origin
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
-        response.headers['Vary'] = 'Origin'
+    if origin:
+        # Check if origin is allowed
+        if origin in ALLOWED_ORIGINS or any(origin.endswith(domain.replace('*', '')) for domain in ALLOWED_ORIGINS if '*' in domain):
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+            response.headers['Vary'] = 'Origin'
     
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
     response.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS'
     
     return response
@@ -256,7 +294,7 @@ def login_required(role=None):
     return wrapper
 
 # --------------------------
-# Routes - pages (UPDATED: index is now welcome page)
+# Routes - pages
 # --------------------------
 @app.route('/')
 def index():
@@ -856,24 +894,44 @@ def login():
             return jsonify({'error': 'All fields are required'}), 400
 
         hashed_password = hash_password(password)
-        conn = get_db()
-        c = conn.cursor()
-
+        
+        # Retry logic for database connection
+        max_retries = 3
+        retry_count = 0
         user = None
-        if role == 'admin':
-            c.execute("SELECT * FROM admins WHERE username = ? AND password = ?", (username, hashed_password))
-        elif role == 'teacher':
-            c.execute("SELECT * FROM teachers WHERE username = ? AND password = ?", (username, hashed_password))
-        elif role == 'student':
-            c.execute("SELECT * FROM students WHERE (username = ? OR student_id = ?) AND password = ?", (username, username, hashed_password))
-        else:
-            conn.close()
-            return jsonify({'error': 'Invalid role selected'}), 400
+        conn = None
+        
+        while retry_count < max_retries and not user:
+            try:
+                conn = get_db()
+                c = conn.cursor()
 
-        row = c.fetchone()
-        if row:
-            user = {k: row[k] for k in row.keys()}
-        conn.close()
+                if role == 'admin':
+                    c.execute("SELECT * FROM admins WHERE username = ? AND password = ?", (username, hashed_password))
+                elif role == 'teacher':
+                    c.execute("SELECT * FROM teachers WHERE username = ? AND password = ?", (username, hashed_password))
+                elif role == 'student':
+                    c.execute("SELECT * FROM students WHERE (username = ? OR student_id = ?) AND password = ?", (username, username, hashed_password))
+                else:
+                    if conn:
+                        conn.close()
+                    return jsonify({'error': 'Invalid role selected'}), 400
+
+                row = c.fetchone()
+                if row:
+                    user = {k: row[k] for k in row.keys()}
+                break  # Success, exit retry loop
+                
+            except sqlite3.OperationalError as e:
+                retry_count += 1
+                print(f"Database error on login (attempt {retry_count}/{max_retries}): {e}")
+                if retry_count >= max_retries:
+                    return jsonify({'error': 'Database temporarily unavailable'}), 503
+                import time
+                time.sleep(1)
+            finally:
+                if conn:
+                    conn.close()
 
         if not user:
             return jsonify({'error': 'Invalid credentials'}), 401
@@ -898,6 +956,7 @@ def login():
         # Force session save
         session.modified = True
 
+        # Log success (but not in production)
         if not os.environ.get('RENDER'):
             print(f"Session after login: {dict(session)}")
 
@@ -910,12 +969,27 @@ def login():
         # Remove password from user object
         user.pop('password', None)
         
-        return jsonify({'success': True, 'redirect': redirect_url, 'user': user})
+        # Create response with proper CORS headers
+        response = jsonify({'success': True, 'redirect': redirect_url, 'user': user})
+        
+        # Ensure session cookie is set
+        if os.environ.get('RENDER'):
+            # In production, ensure secure settings
+            response.set_cookie(
+                'school_session',
+                value=session.get('_id', ''),
+                httponly=True,
+                secure=True,
+                samesite='Lax',
+                max_age=timedelta(hours=24)
+            )
+        
+        return response
     
     except Exception as e:
         print(f"Login error: {e}")
         traceback.print_exc()
-        return jsonify({'error': 'Server error occurred'}), 500
+        return jsonify({'error': f'Server error occurred: {str(e)}'}), 500
 
 @app.route('/api/logout', methods=['POST', 'OPTIONS'])
 def logout():
@@ -1038,8 +1112,27 @@ def health_check():
         # Test database connection
         conn = get_db()
         conn.execute("SELECT 1").fetchone()
+        
+        # Check if we have users
+        c = conn.cursor()
+        c.execute("SELECT COUNT(*) as count FROM admins")
+        admin_count = c.fetchone()['count']
+        c.execute("SELECT COUNT(*) as count FROM teachers")
+        teacher_count = c.fetchone()['count']
+        c.execute("SELECT COUNT(*) as count FROM students")
+        student_count = c.fetchone()['count']
+        
         conn.close()
-        return jsonify({'status': 'healthy', 'database': 'connected'}), 200
+        
+        return jsonify({
+            'status': 'healthy', 
+            'database': 'connected',
+            'stats': {
+                'admins': admin_count,
+                'teachers': teacher_count,
+                'students': student_count
+            }
+        }), 200
     except Exception as e:
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
 
@@ -1065,6 +1158,8 @@ def internal_error(error):
 # --------------------------
 if __name__ == '__main__':
     print("🚀 Davis Academy Portal Starting...")
+    print(f"Python version: {sys.version}")
+    print(f"Current directory: {os.getcwd()}")
     
     # Initialize database
     init_db()
@@ -1075,7 +1170,9 @@ if __name__ == '__main__':
         port = int(os.environ.get('PORT', 10000))
         print(f"\n" + "="*50)
         print(f"📍 Server will start on port {port}")
-        print("📍 Make sure to set these environment variables in Render:")
+        print(f"📍 Database path: {DB_PATH}")
+        print(f"📍 Session path: {app.config['SESSION_FILE_DIR']}")
+        print("\n📍 Make sure to set these environment variables in Render:")
         print("   - SECRET_KEY: (set a secure random string)")
         print("   - SESSION_COOKIE_SECURE: True")
         print("   - DEFAULT_ADMIN_PASSWORD: (optional)")
