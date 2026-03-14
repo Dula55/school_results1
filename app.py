@@ -250,27 +250,24 @@ def init_db():
                 VALUES (?, ?, ?, ?, ?)
             ''', ('admin', admin_password, 'System Administrator', 'admin', now))
             print("✅ Default admin created")
+        else:
+            print("ℹ️ Admin account already exists, skipping creation")
 
-        # Check and create default teacher if none exists
+        # DO NOT create default teacher accounts automatically
         c.execute("SELECT COUNT(*) as count FROM teachers")
-        if c.fetchone()['count'] == 0:
-            teacher_password = hash_password('teacher123')
-            c.execute('''
-                INSERT INTO teachers (username, password, name, email, subject, phone, role, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', ('john.doe', teacher_password, 'John Doe', 'john.doe@davis.edu', 'Mathematics', '555-0100', 'teacher', now))
-            print("✅ Default teacher created")
+        teacher_count = c.fetchone()['count']
+        if teacher_count == 0:
+            print("ℹ️ No teachers found. Teachers can be added by admin through the dashboard.")
+        else:
+            print(f"ℹ️ {teacher_count} teacher(s) already exist")
 
-        # Check and create default student if none exists
+        # DO NOT create default student accounts automatically
         c.execute("SELECT COUNT(*) as count FROM students")
-        if c.fetchone()['count'] == 0:
-            student_password = hash_password('student123')
-            student_id = generate_user_id('STU')
-            c.execute('''
-                INSERT INTO students (username, password, name, student_id, level, arm, phone, role, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', ('jane.smith', student_password, 'Jane Smith', student_id, 'SS3', 'A', '555-0200', 'student', now))
-            print("✅ Default student created")
+        student_count = c.fetchone()['count']
+        if student_count == 0:
+            print("ℹ️ No students found. Students can be added by admin through the dashboard.")
+        else:
+            print(f"ℹ️ {student_count} student(s) already exist")
 
         conn.commit()
         print("✅ Database initialized successfully")
@@ -1326,9 +1323,9 @@ if __name__ == '__main__':
     else:
         print("\n" + "="*50)
         print("📍 Server: http://localhost:5000")
-        print("\n🔑 Default credentials:")
+        print("\n🔑 Default admin credentials:")
         print("   - Admin: admin / admin123")
-        print("   - Teacher: john.doe / teacher123")
-        print("   - Student: jane.smith / student123")
+        print("\n📝 Note: No default teacher or student accounts are created.")
+        print("   Add teachers and students through the admin dashboard.")
         print("="*50 + "\n")
         app.run(debug=True, host='0.0.0.0', port=5000)

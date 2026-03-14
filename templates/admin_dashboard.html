@@ -84,8 +84,32 @@
         .user-chip .uname { color: white; font-size: 13px; font-weight: 500; }
         .user-chip .urole { color: rgba(255,255,255,0.5); font-size: 11px; }
 
-        .btn-logout { background: rgba(255,255,255,0.1); border: none; color: rgba(255,255,255,0.7); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-family: 'DM Sans',sans-serif; font-size: 13px; font-weight: 500; transition: all 0.2s; }
-        .btn-logout:hover { background: rgba(255,255,255,0.2); color: white; }
+        .btn-logout {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: rgba(255,255,255,0.7);
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: 'DM Sans',sans-serif;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-logout:hover {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            transform: translateY(-1px);
+        }
+        .btn-logout:active {
+            transform: translateY(0);
+        }
+        .logout-icon {
+            font-size: 14px;
+        }
 
         .app-layout { display: flex; flex: 1; min-height: 0; }
 
@@ -303,7 +327,6 @@
             border: none;
             color: white;
             font-size: 20px;
-            display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
@@ -327,8 +350,14 @@
             .app-topbar { padding: 0 14px; height: 60px; }
             .topbar-brand span { font-size: 1rem; }
             .hamburger { display: inline-flex; }
-            .topbar-right .user-chip { display: none; } /* hide user chip to save space - avatar remains useful */
-            .btn-logout { display: none; }
+            
+            /* Show logout button on mobile but with different styling */
+            .btn-logout {
+                padding: 6px 12px;
+                font-size: 12px;
+            }
+            .logout-text { display: none; } /* Hide text on mobile, show icon only */
+            .logout-icon { margin-right: 0; }
 
             /* Make sidebar slide-in on mobile instead of disappearing */
             .sidebar {
@@ -392,7 +421,10 @@
                     <div class="urole" id="topRole">Admin</div>
                 </div>
             </div>
-            <button class="btn-logout" onclick="doLogout()">Sign Out</button>
+            <button class="btn-logout" onclick="doLogout()">
+                <span class="logout-icon">🚪</span>
+                <span class="logout-text">Sign Out</span>
+            </button>
         </div>
     </div>
 
@@ -409,6 +441,10 @@
             <div class="sidebar-section">
                 <div class="sidebar-label">Account</div>
                 <button class="nav-item" onclick="openModal('changePwdModal')"><span class="nav-icon">🔒</span> Change Password</button>
+                <!-- Mobile logout option in sidebar (visible only on mobile) -->
+                <button class="nav-item" onclick="doLogout()" style="display:none;" id="mobileLogoutBtn">
+                    <span class="nav-icon">🚪</span> Sign Out
+                </button>
             </div>
         </nav>
 
@@ -826,7 +862,22 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('mobileBackdrop').classList.remove('active');
         }
     });
+
+    // Handle mobile logout button visibility
+    handleMobileLayout();
 });
+
+function handleMobileLayout() {
+    const mobileLogoutBtn = document.getElementById('mobileLogoutBtn');
+    if (window.innerWidth <= 768) {
+        mobileLogoutBtn.style.display = 'flex';
+    } else {
+        mobileLogoutBtn.style.display = 'none';
+    }
+}
+
+// Listen for window resize to update mobile layout
+window.addEventListener('resize', handleMobileLayout);
 
 async function initDashboard() {
     try {
@@ -862,10 +913,29 @@ async function initDashboard() {
     }
 }
 
+// Enhanced logout function with confirmation
 function doLogout() {
-    apiCall('/logout', { method: 'POST' })
-        .then(() => { window.location.href = '/'; })
-        .catch(() => { window.location.href = '/'; });
+    if (confirm('Are you sure you want to sign out?')) {
+        // Show loading state on button
+        const logoutBtn = document.querySelector('.btn-logout');
+        const originalText = logoutBtn.innerHTML;
+        logoutBtn.innerHTML = '<span class="logout-icon">⏳</span><span class="logout-text">Signing out...</span>';
+        logoutBtn.disabled = true;
+
+        apiCall('/logout', { method: 'POST' })
+            .then(() => { 
+                window.location.href = '/'; 
+            })
+            .catch(() => { 
+                // Even if API fails, redirect to login
+                window.location.href = '/'; 
+            })
+            .finally(() => {
+                // Reset button state if redirect doesn't happen immediately
+                logoutBtn.innerHTML = originalText;
+                logoutBtn.disabled = false;
+            });
+    }
 }
 
 /* SECTION MANAGEMENT */

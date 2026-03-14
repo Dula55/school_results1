@@ -29,8 +29,32 @@ body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--gray-8
 .user-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:var(--navy);}
 .user-chip .uname{color:white;font-size:13px;font-weight:500;}
 .user-chip .urole{color:rgba(255,255,255,0.5);font-size:11px;}
-.btn-logout{background:rgba(255,255,255,0.1);border:none;color:rgba(255,255,255,0.7);padding:8px 16px;border-radius:6px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;transition:all 0.2s;}
-.btn-logout:hover{background:rgba(255,255,255,0.2);color:white;}
+.btn-logout{
+  background:rgba(255,255,255,0.1);
+  border:none;
+  color:rgba(255,255,255,0.7);
+  padding:8px 16px;
+  border-radius:6px;
+  cursor:pointer;
+  font-family:'DM Sans',sans-serif;
+  font-size:13px;
+  font-weight:500;
+  transition:all 0.2s;
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.btn-logout:hover{
+  background:rgba(255,255,255,0.2);
+  color:white;
+  transform:translateY(-1px);
+}
+.btn-logout:active{
+  transform:translateY(0);
+}
+.logout-icon{
+  font-size:14px;
+}
 .app-layout{display:flex;flex:1;min-height:0;}
 .sidebar{width:220px;background:white;border-right:1px solid var(--gray-200);padding:24px 0;flex-shrink:0;overflow-y:auto;position:sticky;top:64px;height:calc(100vh - 64px);}
 .sidebar-section{padding:0 16px;margin-bottom:8px;}
@@ -93,6 +117,7 @@ tbody td{padding:11px 14px;color:var(--gray-800);vertical-align:middle;}
 .g-a{color:#1a6b3a;font-weight:700;}.g-b{color:#2471a3;font-weight:700;}.g-c{color:#1a7a1a;font-weight:700;}
 .g-d{color:#d68910;font-weight:700;}.g-e{color:#cb4335;font-weight:700;}.g-f{color:#922b21;font-weight:700;}
 ::-webkit-scrollbar{width:6px;height:6px;}::-webkit-scrollbar-track{background:var(--gray-100);}::-webkit-scrollbar-thumb{background:var(--gray-200);border-radius:3px;}
+
 /* MOBILE RESPONSIVE */
 @media(max-width:992px){
   .app-main{padding:20px 16px;}
@@ -100,6 +125,24 @@ tbody td{padding:11px 14px;color:var(--gray-800);vertical-align:middle;}
   .sidebar{position:fixed;top:64px;left:-260px;width:240px;height:100%;padding-top:20px;z-index:400;transition:left 0.25s;box-shadow:2px 0 12px rgba(0,0,0,0.2);}
   .sidebar.active{left:0;}
   .sidebar-toggle{display:flex;align-items:center;justify-content:center;width:36px;height:36px;background:var(--gold);border-radius:50%;cursor:pointer;font-size:20px;margin-right:12px;}
+  
+  /* Mobile logout styling */
+  .btn-logout {
+    padding:6px 12px;
+  }
+  .logout-text { display:none; } /* Hide text on mobile, show icon only */
+  
+  /* Add mobile logout in sidebar */
+  .nav-item.mobile-logout {
+    display:flex;
+    color:var(--red);
+    margin-top:20px;
+    border-top:1px solid var(--gray-200);
+    padding-top:15px;
+  }
+  .nav-item.mobile-logout:hover {
+    background:var(--red-light);
+  }
 }
 </style>
 </head>
@@ -116,7 +159,10 @@ tbody td{padding:11px 14px;color:var(--gray-800);vertical-align:middle;}
         <div class="user-avatar" id="topAvatar" style="background:var(--gold);"></div>
         <div><div class="uname" id="topName">—</div><div class="urole" id="topRole">Student</div></div>
       </div>
-      <button class="btn-logout" onclick="doLogout()">Sign Out</button>
+      <button class="btn-logout" onclick="doLogout()">
+        <span class="logout-icon">🚪</span>
+        <span class="logout-text">Sign Out</span>
+      </button>
     </div>
   </div>
   <div class="app-layout">
@@ -128,6 +174,10 @@ tbody td{padding:11px 14px;color:var(--gray-800);vertical-align:middle;}
       <div class="sidebar-section">
         <div class="sidebar-label">Account</div>
         <button class="nav-item" onclick="openModal('changePwdModal')"><span class="nav-icon">🔒</span> Change Password</button>
+        <!-- Mobile logout option in sidebar -->
+        <button class="nav-item mobile-logout" onclick="doLogout()" style="display:none;" id="mobileLogoutBtn">
+          <span class="nav-icon">🚪</span> Sign Out
+        </button>
       </div>
     </nav>
     <main class="app-main" id="appMain">
@@ -177,6 +227,7 @@ tbody td{padding:11px 14px;color:var(--gray-800);vertical-align:middle;}
 
 <script>
 function toggleSidebar(){document.getElementById('sidebarNav').classList.toggle('active');}
+
 // FIX: Use relative /api path, NOT http://localhost:5000/api.
 // The page is served from http://127.0.0.1:5000. Fetching to http://localhost:5000
 // is a DIFFERENT origin — the session cookie (issued to 127.0.0.1) is never
@@ -201,7 +252,22 @@ async function apiCall(endpoint, options = {}) {
 
 let currentUser = null;
 
-document.addEventListener('DOMContentLoaded', () => { initDashboard(); });
+document.addEventListener('DOMContentLoaded', () => { 
+    initDashboard();
+    handleMobileLayout();
+    
+    // Listen for window resize
+    window.addEventListener('resize', handleMobileLayout);
+});
+
+function handleMobileLayout() {
+    const mobileLogoutBtn = document.getElementById('mobileLogoutBtn');
+    if (window.innerWidth <= 992) {
+        mobileLogoutBtn.style.display = 'flex';
+    } else {
+        mobileLogoutBtn.style.display = 'none';
+    }
+}
 
 async function initDashboard() {
     try {
@@ -218,13 +284,41 @@ async function initDashboard() {
     }
 }
 
-function doLogout() { apiCall('/logout', { method:'POST' }).finally(() => { window.location.href = '/'; }); }
+// Enhanced logout function with confirmation
+function doLogout() {
+    if (confirm('Are you sure you want to sign out?')) {
+        // Show loading state on button
+        const logoutBtn = document.querySelector('.btn-logout');
+        const originalText = logoutBtn.innerHTML;
+        logoutBtn.innerHTML = '<span class="logout-icon">⏳</span><span class="logout-text">Signing out...</span>';
+        logoutBtn.disabled = true;
+        
+        apiCall('/logout', { method:'POST' })
+            .then(() => { 
+                window.location.href = '/'; 
+            })
+            .catch(() => { 
+                // Even if API fails, redirect to login
+                window.location.href = '/'; 
+            })
+            .finally(() => {
+                // Reset button state if redirect doesn't happen immediately
+                logoutBtn.innerHTML = originalText;
+                logoutBtn.disabled = false;
+            });
+    }
+}
 
 function showSection(name, btn) {
     document.querySelectorAll('#appMain .page-section').forEach(s => s.classList.remove('active'));
     document.getElementById('ssec-' + name).classList.add('active');
     document.querySelectorAll('#sidebarNav .nav-item').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
+    
+    // Close mobile sidebar after navigation
+    if (window.innerWidth <= 992) {
+        document.getElementById('sidebarNav').classList.remove('active');
+    }
 }
 
 async function loadStudentResult() {

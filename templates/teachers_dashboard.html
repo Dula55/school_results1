@@ -30,8 +30,51 @@ body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--gray-8
 .user-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:var(--navy);background:var(--gold);}
 .user-chip .uname{color:white;font-size:13px;font-weight:500;}
 .user-chip .urole{color:rgba(255,255,255,0.5);font-size:11px;}
-.btn-logout{background:rgba(255,255,255,0.08);border:none;color:rgba(255,255,255,0.8);padding:8px 14px;border-radius:6px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;transition:all 0.18s;}
-.btn-logout:hover{background:rgba(255,255,255,0.14);color:white;}
+
+/* Enhanced Logout Button */
+.btn-logout {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.9);
+  padding: 8px 16px;
+  border-radius: 30px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: 0.3px;
+}
+.btn-logout:hover {
+  background: rgba(255,255,255,0.15);
+  border-color: rgba(255,255,255,0.3);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+.btn-logout:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+.btn-logout:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.logout-icon {
+  font-size: 14px;
+  transition: transform 0.2s;
+}
+.btn-logout:hover .logout-icon {
+  transform: translateX(2px);
+}
+.logout-text {
+  display: inline;
+}
+
 .hamburger{display:none;background:transparent;border:0;color:white;font-size:20px;padding:8px;border-radius:8px;cursor:pointer;}
 .hamburger:active{transform:scale(0.98);}
 
@@ -116,6 +159,15 @@ tbody td{padding:10px 12px;color:var(--gray-800);vertical-align:middle;}
 .sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(13,31,60,0.45);z-index:290;opacity:0;transition:opacity .18s;}
 .sidebar.open{transform:translateX(0);left:0;box-shadow:0 10px 30px rgba(10,20,40,0.2);position:fixed;top:64px;height:calc(100vh - 64px);width:260px;overflow-y:auto;}
 .sidebar{left:0;}
+
+/* Mobile logout button in sidebar */
+.mobile-logout-item {
+  display: none;
+  margin-top: 20px;
+  border-top: 1px solid var(--gray-200);
+  padding-top: 16px;
+}
+
 /* ensure sidebar hidden by default on small screens */
 @media (max-width: 768px) {
   .hamburger{display:inline-flex;}
@@ -133,6 +185,24 @@ tbody td{padding:10px 12px;color:var(--gray-800);vertical-align:middle;}
   tbody td{font-size:13px;padding:9px 10px;}
   .page-title{font-size:1.35rem;}
   .topbar-brand span{font-size:1rem;}
+  
+  /* Adjust logout button on mobile */
+  .btn-logout {
+    padding: 6px 12px;
+  }
+  .logout-text {
+    display: none; /* Hide text on mobile, show icon only */
+  }
+  .logout-icon {
+    margin-right: 0;
+    font-size: 16px;
+  }
+  
+  /* Show mobile logout in sidebar */
+  .mobile-logout-item {
+    display: block;
+  }
+  
   /* bottom mobile nav */
   .mobile-bottom-nav{display:flex;position:fixed;left:10px;right:10px;bottom:10px;height:56px;background:white;border-radius:14px;align-items:center;justify-content:space-around;box-shadow:var(--shadow-lg);z-index:350;padding:6px 8px;border:1px solid var(--gray-200);}
   .mobile-bottom-nav button{background:transparent;border:0;padding:8px 12px;border-radius:10px;font-size:13px;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--gray-600);cursor:pointer;}
@@ -174,7 +244,10 @@ tbody td{padding:10px 12px;color:var(--gray-800);vertical-align:middle;}
           <div class="urole" id="topRole">Teacher</div>
         </div>
       </div>
-      <button class="btn-logout" onclick="doLogout()">Sign Out</button>
+      <button class="btn-logout" onclick="doLogout()" id="logoutBtn">
+        <span class="logout-icon">🚪</span>
+        <span class="logout-text">Sign Out</span>
+      </button>
     </div>
   </div>
 
@@ -188,6 +261,12 @@ tbody td{padding:10px 12px;color:var(--gray-800);vertical-align:middle;}
       <div class="sidebar-section">
         <div class="sidebar-label">Account</div>
         <button class="nav-item" onclick="openModal('changePwdModal')"><span class="nav-icon">🔒</span> Change Password</button>
+      </div>
+      <!-- Mobile logout option in sidebar -->
+      <div class="sidebar-section mobile-logout-item">
+        <button class="nav-item" onclick="doLogout()">
+          <span class="nav-icon">🚪</span> Sign Out
+        </button>
       </div>
     </nav>
 
@@ -311,6 +390,7 @@ tbody td{padding:10px 12px;color:var(--gray-800);vertical-align:middle;}
   <button onclick="showSection('enter', this)" id="mbEnterBtn"><div class="mb-icon">✏️</div><div style="font-size:11px">Enter</div></button>
   <button onclick="showSection('tresults', this)" id="mbResultsBtn"><div class="mb-icon">📋</div><div style="font-size:11px">Results</div></button>
   <button onclick="openModal('changePwdModal')" id="mbAcctBtn"><div class="mb-icon">🔒</div><div style="font-size:11px">Account</div></button>
+  <button onclick="doLogout()" id="mbLogoutBtn"><div class="mb-icon">🚪</div><div style="font-size:11px">Logout</div></button>
 </div>
 
 <div id="toast"></div>
@@ -363,6 +443,23 @@ function closeSidebar() {
 // Ensure sidebar closes on navigation when on mobile
 function closeSidebarIfMobile() { if (window.innerWidth <= 768) closeSidebar(); }
 
+// Enhanced logout function with confirmation and loading state
+function doLogout() {
+  if (confirm('Are you sure you want to sign out?')) {
+    const logoutBtn = document.getElementById('logoutBtn');
+    const originalHTML = logoutBtn.innerHTML;
+    
+    // Show loading state
+    logoutBtn.innerHTML = '<span class="logout-icon">⏳</span><span class="logout-text">Signing out...</span>';
+    logoutBtn.disabled = true;
+    
+    apiCall('/logout', { method: 'POST' })
+      .finally(() => {
+        window.location.href = '/';
+      });
+  }
+}
+
 // --- existing dashboard logic ---
 async function initDashboard() {
     try {
@@ -399,10 +496,6 @@ function updateMobileNavVisibility() {
   }
 }
 
-function doLogout() {
-    apiCall('/logout', { method: 'POST' }).finally(() => { window.location.href = '/'; });
-}
-
 function showSection(name, btn) {
     document.querySelectorAll('#appMain .page-section').forEach(s => s.classList.remove('active'));
     const el = document.getElementById('tsec-' + name);
@@ -420,7 +513,7 @@ function showSection(name, btn) {
       });
     }
     // also reflect active state on mobile bottom nav
-    ['mbEnterBtn','mbResultsBtn','mbAcctBtn'].forEach(id => {
+    ['mbEnterBtn','mbResultsBtn','mbAcctBtn','mbLogoutBtn'].forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
       el.classList.remove('active');
