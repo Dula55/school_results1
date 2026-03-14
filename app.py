@@ -86,7 +86,11 @@ def safe_db_operation(operation, *args, **kwargs):
     raise Exception("Max retries exceeded for database operation")
 
 def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Hash password with SHA256 - trim whitespace and handle None"""
+    if password is None:
+        return None
+    # Trim whitespace from password before hashing
+    return hashlib.sha256(str(password).strip().encode()).hexdigest()
 
 def generate_user_id(prefix):
     return f"{prefix}-{secrets.token_hex(4).upper()}"
@@ -424,6 +428,8 @@ def get_current_user():
         # Add role-specific fields
         if session.get('role') == 'student' and session.get('student_id'):
             user_info['user']['student_id'] = session.get('student_id')
+            user_info['user']['level'] = session.get('level', '')
+            user_info['user']['arm'] = session.get('arm', '')
 
         return jsonify(user_info)
 
@@ -455,7 +461,7 @@ def check_session():
     return jsonify({'logged_in': False})
 
 # --------------------------
-# API - Login
+# API - Login (FIXED: Better password handling)
 # --------------------------
 @app.route('/api/login', methods=['POST', 'OPTIONS'])
 def login():
@@ -481,6 +487,10 @@ def login():
         if not role or not username or not password:
             return jsonify({'error': 'Missing credentials'}), 400
 
+        # Trim whitespace from username and password
+        username = str(username).strip()
+        password = str(password).strip()
+        
         hashed_password = hash_password(password)
 
         def _find_user(conn):
@@ -493,6 +503,7 @@ def login():
                 c.execute("SELECT * FROM teachers WHERE username=? AND password=?",
                           (username, hashed_password))
             elif role == 'student':
+                # Try both username and student_id
                 c.execute(
                     "SELECT * FROM students WHERE (username=? OR student_id=?) AND password=?",
                     (username, username, hashed_password)
@@ -508,6 +519,8 @@ def login():
         user = safe_db_operation(_find_user)
 
         if not user:
+            # Log failed attempt for debugging
+            print(f"❌ Login failed for {role}: {username}")
             return jsonify({'error': 'Invalid credentials'}), 401
 
         # Reset session
@@ -521,12 +534,15 @@ def login():
         if role == 'student':
             session['user_id'] = user.get('student_id') or user.get('username')
             session['student_id'] = user.get('student_id')
+            session['level'] = user.get('level', '')
+            session['arm'] = user.get('arm', '')
         else:
             session['user_id'] = user.get('username')
 
         session.modified = True
 
-        print("✅ LOGIN SESSION:", dict(session))
+        print(f"✅ LOGIN SUCCESS - {role}: {username}")
+        print(f"✅ SESSION DATA: {dict(session)}")
 
         redirect_url = {
             "admin": "/admin_dashboard",
@@ -1167,7 +1183,7 @@ def delete_score_sheet():
         return jsonify({'error': str(e)}), 500
 
 # --------------------------
-# API - Change password
+# API - Change password (FIXED: Better handling)
 # --------------------------
 @app.route('/api/change-password', methods=['POST', 'OPTIONS'])
 def change_password():
@@ -1189,6 +1205,11 @@ def change_password():
 
         if not old_password or not new_password:
             return jsonify({'error': 'All fields are required'}), 400
+        
+        # Trim whitespace
+        old_password = str(old_password).strip()
+        new_password = str(new_password).strip()
+        
         if len(new_password) < 6:
             return jsonify({'error': 'Password must be at least 6 characters'}), 400
 
@@ -1203,17 +1224,35 @@ def change_password():
 
         def _change_password(conn):
             c = conn.cursor()
+            rows_affected = 0
+            
             if role == 'admin':
                 c.execute('UPDATE admins SET password = ? WHERE username = ? AND password = ?',
                          (hashed_new, user_id, hashed_old))
+                rows_affected = c.rowcount
             elif role == 'teacher':
                 c.execute('UPDATE teachers SET password = ? WHERE username = ? AND password = ?',
                          (hashed_new, user_id, hashed_old))
+                rows_affected = c.rowcount
             else:  # student
                 c.execute('UPDATE students SET password = ? WHERE (student_id = ? OR username = ?) AND password = ?',
                          (hashed_new, user_id, user_id, hashed_old))
+                rows_affected = c.rowcount
 
-            if c.rowcount == 0:
+            if rows_affected == 0:
+                # Try case-insensitive approach for debugging
+                if role == 'student':
+                    c.execute("SELECT password FROM students WHERE student_id = ? OR username = ?", 
+                             (user_id, user_id))
+                elif role == 'teacher':
+                    c.execute("SELECT password FROM teachers WHERE username = ?", (user_id,))
+                elif role == 'admin':
+                    c.execute("SELECT password FROM admins WHERE username = ?", (user_id,))
+                
+                row = c.fetchone()
+                if row:
+                    stored_hash = row['password']
+                    print(f"Password mismatch - Stored: {stored_hash}, Provided: {hashed_old}")
                 return False
 
             conn.commit()
@@ -1221,12 +1260,14 @@ def change_password():
 
         success = safe_db_operation(_change_password)
         if success:
+            print(f"✅ Password changed successfully for {role}: {user_id}")
             return jsonify({'success': True})
         else:
             return jsonify({'error': 'Current password is incorrect'}), 400
 
     except Exception as e:
         print(f"Change password error: {e}")
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 # --------------------------
