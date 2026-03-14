@@ -44,7 +44,28 @@ body {
 .wp-hero { background: var(--navy); position: relative; overflow: hidden; padding: 80px 40px 70px; text-align: center; }
 .wp-hero::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse 60% 50% at 20% 50%, rgba(200,149,46,0.12) 0%, transparent 70%), radial-gradient(ellipse 50% 60% at 80% 30%, rgba(42,74,128,0.5) 0%, transparent 70%); pointer-events: none; }
 
-.wp-crest { width: 72px; height: 72px; background: var(--gold); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 32px; position: relative; z-index: 1; box-shadow: 0 0 0 6px rgba(200,149,46,0.2), 0 0 0 12px rgba(200,149,46,0.08); }
+.wp-crest { 
+  width: 80px; 
+  height: 80px; 
+  /* background: var(--gold); */ /* removed to show actual image */
+  border-radius: 50%; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  margin: 0 auto 20px; 
+  /* font-size: 32px; */ /* replaced by image */
+  position: relative; 
+  z-index: 1; 
+  box-shadow: 0 0 0 6px rgba(200,149,46,0.2), 0 0 0 12px rgba(200,149,46,0.08);
+  overflow: hidden;          /* ensure image stays inside circle */
+  background-color: var(--white); /* background for padding if image has transparency */
+}
+.wp-crest img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;       /* fit logo nicely without distortion */
+  display: block;
+}
 
 .wp-hero h1 { font-family: 'Playfair Display', serif; font-size: clamp(2.2rem, 5vw, 3.4rem); color: var(--white); line-height: 1.15; position: relative; z-index: 1; letter-spacing: -0.5px; }
 .wp-hero h1 span { color: var(--gold-light); font-style: italic; }
@@ -123,7 +144,10 @@ body {
 <!-- WELCOME PAGE -->
 <div id="welcomePage">
   <div class="wp-hero">
-    <div class="wp-crest">🎓</div>
+    <!-- logo container replaced with image from static/images/Davis-logo.png -->
+    <div class="wp-crest">
+      <img src="/static/images/Davis-logo.png" alt="Davis Academy Crest" onerror="this.style.display='none'; this.parentElement.innerHTML='🎓'; this.parentElement.style.background='var(--gold)';">
+    </div>
     <h1>Davis <span>Academy, Nasarawa</span><br>Results Portal</h1>
     <p>A secure and modern platform for managing academic performance at Davis Academy Secondary School</p>
     <div class="wp-hero-btns">
@@ -305,5 +329,6 @@ document.getElementById('loginForm').addEventListener('keydown', function (e) {
     }
 });
 </script>
+<!-- small inline script to handle fallback if image missing -->
 </body>
 </html>
