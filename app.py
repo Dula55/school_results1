@@ -24,8 +24,19 @@ sqlite3.register_converter("timestamp", lambda b: b.decode('utf-8') if b else No
 # Get the base directory for the application
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Use /tmp for database in production (Render uses ephemeral filesystem)
+# BUT we need persistent storage - so we'll use a mounted volume or external DB
 if os.environ.get('RENDER'):
-    DB_PATH = '/tmp/davis_academy.db'
+    # For Render, we need to use a persistent disk or external database
+    # Option 1: Use Render Disk (recommended)
+    # Create a disk in Render dashboard and mount it at /opt/render/project/data
+    PERSISTENT_DIR = '/opt/render/project/data'
+    if os.path.exists(PERSISTENT_DIR):
+        DB_PATH = os.path.join(PERSISTENT_DIR, 'davis_academy.db')
+    else:
+        # Fallback to /tmp but warn that data won't persist
+        DB_PATH = '/tmp/davis_academy.db'
+        print("⚠️ WARNING: Using /tmp for database - data will NOT persist between restarts!")
+        print("⚠️ Create a persistent disk in Render dashboard and mount it at /opt/render/project/data")
 else:
     DB_PATH = os.path.join(BASE_DIR, 'davis_academy.db')
 
@@ -130,10 +141,15 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_NAME'] = 'school_session'
 app.config['SESSION_REFRESH_EACH_REQUEST'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
-# On Render the app directory is read-only; /tmp is the only writable space.
-# This mirrors the same pattern already used for DB_PATH above.
+
+# Session storage - use persistent disk if available
 if os.environ.get('RENDER'):
-    app.config['SESSION_FILE_DIR'] = '/tmp/flask_session'
+    PERSISTENT_DIR = '/opt/render/project/data'
+    if os.path.exists(PERSISTENT_DIR):
+        app.config['SESSION_FILE_DIR'] = os.path.join(PERSISTENT_DIR, 'flask_session')
+    else:
+        app.config['SESSION_FILE_DIR'] = '/tmp/flask_session'
+        print("⚠️ WARNING: Using /tmp for session data - sessions will NOT persist between restarts!")
 else:
     app.config['SESSION_FILE_DIR'] = os.path.join(BASE_DIR, 'flask_session')
 app.config['SESSION_COOKIE_PATH'] = '/'
@@ -275,6 +291,10 @@ def init_db():
         # Set proper permissions on database file
         if os.path.exists(DB_PATH):
             os.chmod(DB_PATH, 0o666)
+
+        # Log database location and size
+        db_size = os.path.getsize(DB_PATH) if os.path.exists(DB_PATH) else 0
+        print(f"📊 Database size: {db_size} bytes")
 
     except Exception as e:
         print(f"❌ Database initialization error: {e}")
@@ -1279,9 +1299,47 @@ def health_check():
             return True
 
         safe_db_operation(_check_db)
-        return jsonify({'status': 'healthy'}), 200
+        
+        # Return database info
+        db_size = os.path.getsize(DB_PATH) if os.path.exists(DB_PATH) else 0
+        return jsonify({
+            'status': 'healthy',
+            'database': {
+                'path': DB_PATH,
+                'exists': os.path.exists(DB_PATH),
+                'size_bytes': db_size
+            },
+            'session_dir': app.config['SESSION_FILE_DIR']
+        }), 200
     except Exception as e:
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
+
+# --------------------------
+# Backup endpoint (optional)
+# --------------------------
+@app.route('/api/backup', methods=['POST', 'OPTIONS'])
+def backup_database():
+    """Create a backup of the database"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
+    if 'user_id' not in session or session.get('role') != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    try:
+        if os.path.exists(DB_PATH):
+            backup_path = DB_PATH + '.backup'
+            import shutil
+            shutil.copy2(DB_PATH, backup_path)
+            return jsonify({'success': True, 'backup_path': backup_path})
+        return jsonify({'error': 'Database not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # --------------------------
 # Error handlers
@@ -1310,6 +1368,20 @@ print("🚀 Davis Academy Portal Starting...")
 print(f"Python version: {sys.version}")
 print(f"Session directory: {app.config['SESSION_FILE_DIR']}")
 print(f"Database path: {DB_PATH}")
+
+# Check if we're on Render and using persistent storage
+if os.environ.get('RENDER'):
+    PERSISTENT_DIR = '/opt/render/project/data'
+    if os.path.exists(PERSISTENT_DIR):
+        print(f"✅ Using persistent storage at {PERSISTENT_DIR}")
+    else:
+        print("⚠️ WARNING: No persistent storage found!")
+        print("⚠️ To persist data, create a disk in Render dashboard:")
+        print("   1. Go to your service → Disks → Add Disk")
+        print("   2. Mount path: /opt/render/project/data")
+        print("   3. Size: 1 GB (minimum)")
+        print("⚠️ Without persistent storage, all data will be lost on restart!")
+
 init_db()
 
 # --------------------------
