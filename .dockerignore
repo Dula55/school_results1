@@ -1,4 +1,13 @@
-# flyctl launch added from .venv\.gitignore
-# Created by venv; see https://docs.python.org/3/library/venv.html
-.venv\**\*
-fly.toml
+__pycache__
+*.pyc
+.env
+.git
+.DS_Store
+flask_session/
+*.db
+*.db-journal
+*.backup
+venv/
+env/
+.env.local
+.env.*
