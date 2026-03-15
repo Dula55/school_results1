@@ -6,6 +6,7 @@
     <title>Davis Academy — Admin Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         :root {
             --navy: #0d1f3c;
@@ -313,6 +314,10 @@
             margin: 10px 0;
         }
 
+        /* Grade color helpers */
+        .grade-a{color:#1a6b3a;font-weight:700;}.grade-b{color:#2471a3;font-weight:700;}.grade-c{color:#1a7a1a;font-weight:700;}
+        .grade-d{color:#d68910;font-weight:700;}.grade-e{color:#cb4335;font-weight:700;}.grade-f{color:#922b21;font-weight:700;}
+
         /* SCROLLBAR */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: var(--gray-100); }
@@ -482,6 +487,7 @@
                         <button class="btn btn-gold-solid" onclick="showSection('students',null); openAddStudentModal()">➕ Add New Student</button>
                         <button class="btn btn-gold-solid" onclick="showSection('teachers',null); openAddTeacherModal()">➕ Add New Teacher</button>
                         <button class="btn btn-gold-solid" onclick="showSection('scores',null); openAddScoreModal()">➕ Add Score Record</button>
+                        <button class="btn btn-success" onclick="exportScoresToExcel()">📊 Export All Scores to Excel</button>
                     </div>
                 </div>
             </div>
@@ -561,7 +567,10 @@
                         <div class="search-wrap" style="flex:1;max-width:420px;">
                             <input class="search-input" placeholder="Search by student ID..." id="searchScores" onkeyup="filterScores()">
                         </div>
-                        <button class="btn btn-gold-solid" onclick="openAddScoreModal()">➕ Add Score Record</button>
+                        <div style="display:flex; gap:10px;">
+                            <button class="btn btn-gold-solid" onclick="openAddScoreModal()">➕ Add Score Record</button>
+                            <button class="btn btn-success" onclick="exportScoresToExcel()" title="Download Excel">📊 Excel</button>
+                        </div>
                     </div>
                     <div class="table-wrap">
                         <table>
@@ -760,6 +769,21 @@
         </div>
         <div class="modal-body">
             <div id="viewScoresContent"></div>
+        </div>
+    </div>
+</div>
+
+<!-- VIEW SINGLE SCORE MODAL -->
+<div id="viewSingleScoreModal" class="modal-overlay">
+    <div class="modal-box wide">
+        <div class="modal-header">
+            <div class="crest-sm">📊</div>
+            <h2>Score Details</h2>
+            <p id="viewSingleScoreSubtitle">Complete score information</p>
+            <button class="modal-close" onclick="closeModal('viewSingleScoreModal')">×</button>
+        </div>
+        <div class="modal-body">
+            <div id="viewSingleScoreContent"></div>
         </div>
     </div>
 </div>
@@ -1108,7 +1132,7 @@ async function viewStudentScores(studentId) {
                         <td>${s.ca3}</td>
                         <td>${s.exam}</td>
                         <td><strong>${s.total}</strong></td>
-                        <td>${s.grade}</td>
+                        <td class="${getGradeClass(s.grade)}">${s.grade}</td>
                     </tr>`;
                 });
                 html += '</tbody></table></div>';
@@ -1261,9 +1285,10 @@ function renderScoresTable(scores) {
             <td>${s.ca1 || 0} | ${s.ca2 || 0} | ${s.ca3 || 0}</td>
             <td>${s.exam || 0}</td>
             <td><strong>${s.total || 0}</strong></td>
-            <td>${s.grade || 'N/A'}</td>
+            <td class="${getGradeClass(s.grade)}">${s.grade || 'N/A'}</td>
             <td>
                 <div class="action-cell">
+                    <button class="btn btn-sm btn-secondary" onclick="viewSingleScore('${s.student_id}','${s.subject}','${s.term}','${s.session}')">👁️ View</button>
                     <button class="btn btn-sm btn-danger" onclick="deleteScore('${s.student_id}','${s.subject}','${s.term}','${s.session}')">🗑 Delete</button>
                 </div>
             </td>
@@ -1352,7 +1377,148 @@ async function deleteScore(studentId, subject, term, session) {
     }
 }
 
-/* HELPERS */
+/* VIEW SINGLE SCORE FUNCTION */
+async function viewSingleScore(studentId, subject, term, session) {
+    try {
+        // Fetch all scores for this student
+        const scores = await apiCall(`/scores/manage?student_id=${studentId}`);
+        
+        // Find the specific score
+        const score = scores.find(s => 
+            s.subject === subject && 
+            s.term === term && 
+            s.session === session
+        );
+
+        if (!score) {
+            toast('Score not found', 'error');
+            return;
+        }
+
+        document.getElementById('viewSingleScoreSubtitle').textContent = 
+            `Student: ${studentId} | ${subject} | ${term} ${session}`;
+
+        const html = `
+            <div style="background: var(--gold-pale); padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                <h3 style="color: var(--navy); margin-bottom: 15px;">Score Summary</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+                    <div><strong>Student ID:</strong><br>${score.student_id}</div>
+                    <div><strong>Term:</strong><br>${score.term}</div>
+                    <div><strong>Session:</strong><br>${score.session}</div>
+                    <div><strong>Subject:</strong><br>${score.subject}</div>
+                </div>
+            </div>
+            
+            <div style="margin: 20px 0;">
+                <h4 style="color: var(--navy); margin-bottom: 10px;">Score Breakdown</h4>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>CA 1 (10)</th>
+                                <th>CA 2 (10)</th>
+                                <th>CA 3 (10)</th>
+                                <th>Exam (70)</th>
+                                <th>Total (100)</th>
+                                <th>Grade</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>${score.ca1}</td>
+                                <td>${score.ca2}</td>
+                                <td>${score.ca3}</td>
+                                <td>${score.exam}</td>
+                                <td><strong>${score.total}</strong></td>
+                                <td class="${getGradeClass(score.grade)}"><strong>${score.grade}</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div style="background: var(--gray-100); padding: 15px; border-radius: 8px; text-align: center;">
+                <p style="margin-bottom: 5px;"><strong>Performance Remark:</strong></p>
+                <p>${getRemark(score.grade)}</p>
+            </div>
+        `;
+
+        document.getElementById('viewSingleScoreContent').innerHTML = html;
+        openModal('viewSingleScoreModal');
+    } catch (error) {
+        toast('Failed to load score details', 'error');
+    }
+}
+
+/* EXPORT TO EXCEL FUNCTION */
+function exportScoresToExcel() {
+    if (!allScores || allScores.length === 0) {
+        toast('No scores to export', 'error');
+        return;
+    }
+
+    try {
+        // Prepare data for Excel
+        const excelData = allScores.map(s => ({
+            'Student ID': s.student_id,
+            'Term': s.term,
+            'Session': s.session,
+            'Subject': s.subject,
+            'CA 1': s.ca1,
+            'CA 2': s.ca2,
+            'CA 3': s.ca3,
+            'Exam': s.exam,
+            'Total': s.total,
+            'Grade': s.grade
+        }));
+
+        // Create worksheet
+        const ws = XLSX.utils.json_to_sheet(excelData);
+        
+        // Create workbook
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Scores');
+        
+        // Generate filename with current date
+        const date = new Date();
+        const dateStr = `${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')}`;
+        const filename = `scores_export_${dateStr}.xlsx`;
+        
+        // Save file
+        XLSX.writeFile(wb, filename);
+        
+        toast('Excel file downloaded successfully!', 'success');
+    } catch (error) {
+        console.error('Excel export error:', error);
+        toast('Failed to export to Excel', 'error');
+    }
+}
+
+/* HELPER FUNCTIONS */
+function getGradeClass(grade) {
+    const gradeMap = {
+        'A': 'grade-a',
+        'B': 'grade-b',
+        'C': 'grade-c',
+        'D': 'grade-d',
+        'E': 'grade-e',
+        'F': 'grade-f'
+    };
+    return gradeMap[grade] || '';
+}
+
+function getRemark(grade) {
+    const remarkMap = {
+        'A': 'Excellent',
+        'B': 'Very Good',
+        'C': 'Good',
+        'D': 'Pass',
+        'E': 'Pass',
+        'F': 'Fail'
+    };
+    return remarkMap[grade] || 'N/A';
+}
+
 function openModal(id) { document.getElementById(id).classList.add('active'); }
 function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 

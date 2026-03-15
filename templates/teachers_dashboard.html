@@ -224,6 +224,26 @@ tbody td{padding:10px 12px;color:var(--gray-800);vertical-align:middle;}
 ::-webkit-scrollbar{width:6px;height:6px;}
 ::-webkit-scrollbar-track{background:var(--gray-100);}
 ::-webkit-scrollbar-thumb{background:var(--gray-200);border-radius:3px;}
+
+/* View Result Modal */
+.result-details-card {
+  background: var(--gold-pale);
+  padding: 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+.result-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 15px;
+  margin-bottom: 20px;
+}
+.result-summary {
+  background: var(--gray-100);
+  padding: 15px;
+  border-radius: 8px;
+  text-align: center;
+}
 </style>
 </head>
 <body>
@@ -307,7 +327,7 @@ tbody td{padding:10px 12px;color:var(--gray-800);vertical-align:middle;}
               <span style="font-size:14px;color:var(--gray-600);" id="tsStudentInfo"></span>
               <div style="display:flex;gap:10px;">
                 <button class="btn btn-gold-solid btn-sm" onclick="openEnterScore()">➕ Add Subject</button>
-                <button class="btn btn-success btn-sm" onclick="downloadTeacherExcel()">⬇ Excel</button>
+                <button class="btn btn-success btn-sm" onclick="exportEnterScoresToExcel()">📊 Export to Excel</button>
               </div>
             </div>
             <div class="table-wrap">
@@ -329,6 +349,7 @@ tbody td{padding:10px 12px;color:var(--gray-800);vertical-align:middle;}
             <option>First Term</option><option>Second Term</option><option>Third Term</option>
           </select>
           <div class="search-wrap"><input class="search-input" placeholder="Search student…" id="searchResults" onkeyup="renderTeacherResultsTable(this.value)"></div>
+          <button class="btn btn-success" onclick="exportResultsToExcel()">📊 Export to Excel</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -341,7 +362,7 @@ tbody td{padding:10px 12px;color:var(--gray-800);vertical-align:middle;}
   </div>
 </div>
 
-<!-- ENTER SCORES MODAL -->
+<!-- ENTER SCORES MODAL (for adding new scores) -->
 <div id="enterScoreModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="enterScoreTitle">
   <div class="modal-box wide" role="document">
     <div class="modal-header">
@@ -363,6 +384,47 @@ tbody td{padding:10px 12px;color:var(--gray-800);vertical-align:middle;}
       <div id="scorePreview" style="display:none;padding:12px 16px;background:var(--gold-pale);border-radius:8px;margin-bottom:14px;font-size:14px;"></div>
       <button class="btn btn-gold-solid btn-full" onclick="saveScore()">💾 Save Score</button>
       <p style="font-size:11.5px;color:var(--gray-400);text-align:center;margin-top:10px;">CA1 + CA2 + CA3 + Exam = 100 total</p>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT SCORES MODAL (for editing existing scores) -->
+<div id="editScoreModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="editScoreTitle">
+  <div class="modal-box wide" role="document">
+    <div class="modal-header">
+      <div class="crest-sm">✏️</div>
+      <h2 id="editScoreTitle">Edit Score</h2>
+      <p id="editScoreSubtitle">Update subject scores</p>
+      <button class="modal-close" onclick="closeModal('editScoreModal')" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editOriginalSubject">
+      <div class="form-group"><label>Subject</label><input type="text" id="editSubject" placeholder="e.g. Mathematics" readonly style="background:var(--gray-100);"></div>
+      <div class="form-row">
+        <div class="form-group"><label>CA 1 (max 10)</label><input type="number" id="editCA1" min="0" max="10" step="0.5" placeholder="0–10"></div>
+        <div class="form-group"><label>CA 2 (max 10)</label><input type="number" id="editCA2" min="0" max="10" step="0.5" placeholder="0–10"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>CA 3 (max 10)</label><input type="number" id="editCA3" min="0" max="10" step="0.5" placeholder="0–10"></div>
+        <div class="form-group"><label>Exam (max 70)</label><input type="number" id="editExam" min="0" max="70" step="0.5" placeholder="0–70"></div>
+      </div>
+      <div id="editScorePreview" style="display:none;padding:12px 16px;background:var(--gold-pale);border-radius:8px;margin-bottom:14px;font-size:14px;"></div>
+      <button class="btn btn-gold-solid btn-full" onclick="updateScore()">🔄 Update Score</button>
+    </div>
+  </div>
+</div>
+
+<!-- VIEW RESULT DETAILS MODAL -->
+<div id="viewResultModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="viewResultTitle">
+  <div class="modal-box wide" role="document">
+    <div class="modal-header">
+      <div class="crest-sm">📋</div>
+      <h2 id="viewResultTitle">Result Details</h2>
+      <p id="viewResultSubtitle">Complete student performance</p>
+      <button class="modal-close" onclick="closeModal('viewResultModal')" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body" id="viewResultContent">
+      Loading...
     </div>
   </div>
 </div>
@@ -568,6 +630,8 @@ async function renderTsScoreBody() {
                 <td class="${gradeClass(s.grade)}">${s.grade}</td>
                 <td>${remark(s.grade)}</td>
                 <td><div class="action-cell">
+                    <button class="btn btn-sm btn-secondary" onclick="viewSubjectScore('${activeTsStudentId}','${s.subject}','${activeTsTerm}','${activeTsSession}')">👁️ View</button>
+                    <button class="btn btn-sm btn-primary" onclick="openEditScore('${activeTsStudentId}','${s.subject}','${activeTsTerm}','${activeTsSession}')">✏️ Edit</button>
                     <button class="btn btn-sm btn-danger" onclick="deleteSubjectScore('${activeTsStudentId}','${s.subject}','${activeTsTerm}','${activeTsSession}')">🗑</button>
                 </div></td>
             </tr>`).join('');
@@ -613,6 +677,118 @@ async function saveScore() {
     } catch(err) { toast(err.message||'Failed to save score','error'); }
 }
 
+// Open edit score modal with existing data
+async function openEditScore(student_id, subject, term, session) {
+    try {
+        const response = await fetch(`${API_BASE}/scores?student_id=${student_id}&term=${encodeURIComponent(term)}&session=${encodeURIComponent(session)}`, { credentials: 'include' });
+        if (!response.ok) throw new Error('Failed to load score');
+        const scores = await response.json();
+        const sheet = scores[0] || { subjects: [] };
+        const score = sheet.subjects?.find(s => s.subject === subject);
+
+        if (!score) {
+            toast('Score not found', 'error');
+            return;
+        }
+
+        // Populate edit modal with existing data
+        document.getElementById('editOriginalSubject').value = subject;
+        document.getElementById('editSubject').value = subject;
+        document.getElementById('editCA1').value = score.ca1;
+        document.getElementById('editCA2').value = score.ca2;
+        document.getElementById('editCA3').value = score.ca3;
+        document.getElementById('editExam').value = score.exam;
+        
+        // Show preview
+        updateEditScorePreview();
+        
+        // Set subtitle
+        document.getElementById('editScoreSubtitle').textContent = `${student_id} · ${term} ${session}`;
+        
+        // Add input listeners for preview
+        ['editCA1','editCA2','editCA3','editExam'].forEach(id => {
+            document.getElementById(id).oninput = updateEditScorePreview;
+        });
+        
+        openModal('editScoreModal');
+    } catch (error) {
+        toast('Failed to load score details', 'error');
+    }
+}
+
+// Update preview in edit modal
+function updateEditScorePreview() {
+    const ca1 = +document.getElementById('editCA1').value||0;
+    const ca2 = +document.getElementById('editCA2').value||0;
+    const ca3 = +document.getElementById('editCA3').value||0;
+    const ex = +document.getElementById('editExam').value||0;
+    const total = ca1+ca2+ca3+ex;
+    const grade = calcGrade(total);
+    const prev = document.getElementById('editScorePreview');
+    prev.style.display = 'block';
+    prev.innerHTML = `<strong>Preview:</strong> Total = <strong>${total}/100</strong> | Grade: <strong class="${gradeClass(grade)}">${grade}</strong> | ${remark(grade)}`;
+}
+
+// Update score function
+async function updateScore() {
+    const subject = document.getElementById('editSubject').value.trim();
+    const ca1 = parseFloat(document.getElementById('editCA1').value)||0;
+    const ca2 = parseFloat(document.getElementById('editCA2').value)||0;
+    const ca3 = parseFloat(document.getElementById('editCA3').value)||0;
+    const exam = parseFloat(document.getElementById('editExam').value)||0;
+    const total = ca1+ca2+ca3+exam;
+    const grade = calcGrade(total);
+
+    // Validate inputs
+    if (ca1>10||ca2>10||ca3>10) {
+        toast('CA scores must be 0–10', 'error');
+        return;
+    }
+    if (exam>70) {
+        toast('Exam score must be 0–70', 'error');
+        return;
+    }
+    if (total>100) {
+        toast('Total cannot exceed 100', 'error');
+        return;
+    }
+
+    // Since we're updating, we need to delete the old record and create a new one
+    // This is because the API might not support direct updates
+    if (!confirm('Update this score?')) return;
+
+    try {
+        // First delete the old score
+        await apiCall('/scores/delete', { 
+            method:'POST', 
+            body: JSON.stringify({ 
+                student_id: activeTsStudentId, 
+                subject: document.getElementById('editOriginalSubject').value, 
+                term: activeTsTerm, 
+                session: activeTsSession 
+            }) 
+        });
+
+        // Then create the new score
+        await apiCall('/scores', { 
+            method:'POST', 
+            body: JSON.stringify({ 
+                student_id: activeTsStudentId, 
+                term: activeTsTerm, 
+                session: activeTsSession, 
+                subject: subject, 
+                ca1, ca2, ca3, exam, total, grade 
+            }) 
+        });
+
+        closeModal('editScoreModal');
+        await loadStudentScores();
+        toast('Score updated successfully', 'success');
+    } catch(err) { 
+        toast(err.message || 'Failed to update score', 'error'); 
+    }
+}
+
 async function deleteSubjectScore(student_id, subject, term, session) {
     if (!confirm('Delete this score?')) return;
     try {
@@ -638,15 +814,278 @@ async function renderTeacherResultsTable(search='') {
         tbody.innerHTML = filtered.map(r => `<tr>
             <td>${r.student_id}</td><td>${r.name}</td><td>${r.level||''} ${r.arm||''}</td>
             <td>${r.term}</td><td>${r.session}</td><td>${r.subjects?.length||0}</td><td>${r.average||'-'}</td>
-            <td><button class="btn btn-sm btn-secondary" onclick="viewResult('${r.student_id}','${r.term}','${r.session}')">📋 View</button></td>
+            <td><button class="btn btn-sm btn-secondary" onclick="viewResult('${r.student_id}','${r.term}','${r.session}')">👁️ View</button></td>
         </tr>`).join('');
     } catch(err) {
         document.getElementById('tResultsBody').innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--red);padding:24px;">Failed to load results</td></tr>';
     }
 }
 
-function viewResult(student_id, term, session) { toast(`Viewing result for ${student_id} - ${term} ${session}`, 'info'); }
-function downloadTeacherExcel() { toast('Excel download coming soon','info'); }
+// Enhanced viewResult function that shows detailed student performance
+async function viewResult(student_id, term, session) {
+    try {
+        // Fetch all scores for this student, term, and session
+        const response = await fetch(`${API_BASE}/scores?student_id=${student_id}&term=${encodeURIComponent(term)}&session=${encodeURIComponent(session)}`, { credentials: 'include' });
+        if (!response.ok) throw new Error('Failed to load scores');
+        const scores = await response.json();
+        const sheet = scores[0] || { subjects: [] };
+        const subjects = sheet.subjects || [];
+
+        // Get student info
+        const students = await apiCall('/students');
+        const student = students.find(s => s.student_id === student_id) || { name: 'Unknown', level: 'N/A', arm: 'N/A' };
+
+        // Calculate statistics
+        const totalSubjects = subjects.length;
+        const totalScore = subjects.reduce((sum, s) => sum + s.total, 0);
+        const average = totalSubjects > 0 ? (totalScore / totalSubjects).toFixed(2) : 0;
+        
+        // Count grades
+        const gradeCount = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
+        subjects.forEach(s => { if (s.grade && gradeCount.hasOwnProperty(s.grade)) gradeCount[s.grade]++; });
+
+        // Build HTML content
+        const content = `
+            <div class="result-details-card">
+                <h3 style="color: var(--navy); margin-bottom: 15px;">Student Information</h3>
+                <div class="result-details-grid">
+                    <div><strong>Name:</strong> ${student.name}</div>
+                    <div><strong>Student ID:</strong> ${student_id}</div>
+                    <div><strong>Class:</strong> ${student.level || 'N/A'} ${student.arm || ''}</div>
+                    <div><strong>Term:</strong> ${term}</div>
+                    <div><strong>Session:</strong> ${session}</div>
+                </div>
+            </div>
+
+            ${subjects.length === 0 ? 
+                '<p style="text-align:center;color:var(--gray-400);padding:20px;">No subjects found for this term.</p>' : 
+                `
+                <div class="result-summary">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 20px;">
+                        <div><strong>Subjects:</strong> ${totalSubjects}</div>
+                        <div><strong>Total Score:</strong> ${totalScore}</div>
+                        <div><strong>Average:</strong> ${average}</div>
+                    </div>
+                    <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+                        ${Object.entries(gradeCount).map(([g, count]) => count > 0 ? 
+                            `<span class="${gradeClass(g)}"><strong>Grade ${g}:</strong> ${count}</span>` : '').join('')}
+                    </div>
+                </div>
+
+                <h4 style="color: var(--navy); margin: 20px 0 10px;">Subject Scores</h4>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Subject</th>
+                                <th>CA1</th>
+                                <th>CA2</th>
+                                <th>CA3</th>
+                                <th>Exam</th>
+                                <th>Total</th>
+                                <th>Grade</th>
+                                <th>Remark</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${subjects.map(s => `
+                                <tr>
+                                    <td><strong>${s.subject}</strong></td>
+                                    <td>${s.ca1}</td>
+                                    <td>${s.ca2}</td>
+                                    <td>${s.ca3}</td>
+                                    <td>${s.exam}</td>
+                                    <td><strong>${s.total}</strong></td>
+                                    <td class="${gradeClass(s.grade)}"><strong>${s.grade}</strong></td>
+                                    <td>${remark(s.grade)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                `}
+        `;
+
+        document.getElementById('viewResultSubtitle').textContent = `Student: ${student.name} (${student_id})`;
+        document.getElementById('viewResultContent').innerHTML = content;
+        openModal('viewResultModal');
+
+    } catch (error) {
+        console.error('View result error:', error);
+        toast('Failed to load result details', 'error');
+    }
+}
+
+// View individual subject score
+async function viewSubjectScore(student_id, subject, term, session) {
+    try {
+        const response = await fetch(`${API_BASE}/scores?student_id=${student_id}&term=${encodeURIComponent(term)}&session=${encodeURIComponent(session)}`, { credentials: 'include' });
+        if (!response.ok) throw new Error('Failed to load score');
+        const scores = await response.json();
+        const sheet = scores[0] || { subjects: [] };
+        const score = sheet.subjects?.find(s => s.subject === subject);
+
+        if (!score) {
+            toast('Score not found', 'error');
+            return;
+        }
+
+        const content = `
+            <div style="background: var(--gold-pale); padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                <h3 style="color: var(--navy); margin-bottom: 15px;">Score Details</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+                    <div><strong>Student ID:</strong> ${student_id}</div>
+                    <div><strong>Subject:</strong> ${subject}</div>
+                    <div><strong>Term:</strong> ${term}</div>
+                    <div><strong>Session:</strong> ${session}</div>
+                </div>
+            </div>
+            
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>CA1 (10)</th>
+                            <th>CA2 (10)</th>
+                            <th>CA3 (10)</th>
+                            <th>Exam (70)</th>
+                            <th>Total (100)</th>
+                            <th>Grade</th>
+                            <th>Remark</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>${score.ca1}</td>
+                            <td>${score.ca2}</td>
+                            <td>${score.ca3}</td>
+                            <td>${score.exam}</td>
+                            <td><strong>${score.total}</strong></td>
+                            <td class="${gradeClass(score.grade)}"><strong>${score.grade}</strong></td>
+                            <td>${remark(score.grade)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        document.getElementById('viewResultSubtitle').textContent = `${student_id} - ${subject}`;
+        document.getElementById('viewResultContent').innerHTML = content;
+        openModal('viewResultModal');
+
+    } catch (error) {
+        toast('Failed to load score details', 'error');
+    }
+}
+
+// Export Enter Scores to Excel
+function exportEnterScoresToExcel() {
+    if (!activeTsStudentId) {
+        toast('Please select a student first', 'error');
+        return;
+    }
+
+    const tbody = document.getElementById('tsScoreBody');
+    const rows = tbody.querySelectorAll('tr');
+    
+    if (rows.length === 0 || rows[0].cells.length === 1) {
+        toast('No scores to export', 'error');
+        return;
+    }
+
+    try {
+        // Prepare data for Excel
+        const excelData = [];
+        
+        // Add header
+        excelData.push(['Subject', 'CA 1', 'CA 2', 'CA 3', 'Exam', 'Total', 'Grade', 'Remark']);
+        
+        // Add rows
+        rows.forEach(row => {
+            if (row.cells.length > 1) {
+                const rowData = [];
+                for (let i = 0; i < 8; i++) { // Get first 8 columns
+                    rowData.push(row.cells[i]?.textContent || '');
+                }
+                excelData.push(rowData);
+            }
+        });
+
+        // Create worksheet
+        const ws = XLSX.utils.aoa_to_sheet(excelData);
+        
+        // Create workbook
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Student Scores');
+        
+        // Generate filename
+        const studentInfo = document.getElementById('tsStudentInfo').textContent.replace(/[^a-zA-Z0-9]/g, '_');
+        const filename = `scores_${studentInfo}_${activeTsTerm}_${activeTsSession}.xlsx`;
+        
+        // Save file
+        XLSX.writeFile(wb, filename);
+        
+        toast('Excel file downloaded successfully!', 'success');
+    } catch (error) {
+        console.error('Excel export error:', error);
+        toast('Failed to export to Excel', 'error');
+    }
+}
+
+// Export Results to Excel
+async function exportResultsToExcel() {
+    try {
+        const term = document.getElementById('tFilterTerm').value;
+        const url = term ? `/teacher-results?term=${encodeURIComponent(term)}` : '/teacher-results';
+        const results = await apiCall(url);
+
+        if (!results || results.length === 0) {
+            toast('No results to export', 'error');
+            return;
+        }
+
+        // Prepare data for Excel
+        const excelData = [];
+        
+        // Add header
+        excelData.push(['Student ID', 'Name', 'Class', 'Arm', 'Term', 'Session', 'Number of Subjects', 'Average']);
+        
+        // Add rows
+        results.forEach(r => {
+            excelData.push([
+                r.student_id || '',
+                r.name || '',
+                r.level || '',
+                r.arm || '',
+                r.term || '',
+                r.session || '',
+                r.subjects?.length || 0,
+                r.average || '-'
+            ]);
+        });
+
+        // Create worksheet
+        const ws = XLSX.utils.aoa_to_sheet(excelData);
+        
+        // Create workbook
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Teacher Results');
+        
+        // Generate filename with current date
+        const date = new Date();
+        const dateStr = `${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')}`;
+        const termSuffix = term ? `_${term.replace(/\s+/g, '_')}` : '';
+        const filename = `teacher_results${termSuffix}_${dateStr}.xlsx`;
+        
+        // Save file
+        XLSX.writeFile(wb, filename);
+        
+        toast('Excel file downloaded successfully!', 'success');
+    } catch (error) {
+        console.error('Excel export error:', error);
+        toast('Failed to export to Excel', 'error');
+    }
+}
 
 async function doChangePwd() {
     const old = document.getElementById('cpOld').value, nw = document.getElementById('cpNew').value, conf = document.getElementById('cpConfirm').value;
