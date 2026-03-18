@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3 
 import os
 import sqlite3
 import hashlib
@@ -48,16 +48,13 @@ else:
 def get_db():
     """Get a database connection with proper error handling"""
     try:
-        # Ensure the directory exists
         db_dir = os.path.dirname(DB_PATH)
         if db_dir and not os.path.exists(db_dir):
             os.makedirs(db_dir, exist_ok=True)
 
-        # Connect with extended timeout and error handling
         db = sqlite3.connect(DB_PATH, timeout=30)
         db.row_factory = sqlite3.Row
 
-        # Optimize database for concurrent access
         db.execute("PRAGMA foreign_keys = ON")
         db.execute("PRAGMA journal_mode = WAL")
         db.execute("PRAGMA synchronous = NORMAL")
@@ -107,10 +104,8 @@ def hash_password(password):
         return None
     return hashlib.sha256(str(password).strip().encode()).hexdigest()
 
-def generate_user_id(prefix):
-    return f"{prefix}-{secrets.token_hex(4).upper()}"
-
 def generate_random_password():
+    """Generate a random password"""
     return secrets.token_hex(4)
 
 # --------------------------
@@ -140,28 +135,23 @@ app.config['SESSION_COOKIE_NAME'] = 'school_session'
 app.config['SESSION_REFRESH_EACH_REQUEST'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
 
-# Fix: Correct session storage path for Fly.io
+# Session storage path
 if ON_FLY:
-    # Check if we have a volume mounted
     VOLUME_PATH = '/data'
     if os.path.exists(VOLUME_PATH):
-        # Use the volume for sessions
         app.config['SESSION_FILE_DIR'] = os.path.join(VOLUME_PATH, 'flask_session')
-        print(f"✅ Using volume for sessions at {app.config['SESSION_FILE_DIR']}")
     else:
-        # Fallback to /tmp but warn
         app.config['SESSION_FILE_DIR'] = '/tmp/flask_session'
-        print("⚠️ WARNING: Using /tmp for sessions - sessions will NOT persist between restarts!")
+        print("⚠️ WARNING: Using /tmp for session data - sessions will NOT persist between restarts!")
 else:
     app.config['SESSION_FILE_DIR'] = os.path.join(BASE_DIR, 'flask_session')
 
-# Create session directory with proper permissions
+# Create session directory
+os.makedirs(app.config['SESSION_FILE_DIR'], exist_ok=True)
 try:
-    os.makedirs(app.config['SESSION_FILE_DIR'], exist_ok=True)
     os.chmod(app.config['SESSION_FILE_DIR'], 0o777)
-    print(f"📁 Session directory created/verified at {app.config['SESSION_FILE_DIR']}")
-except Exception as e:
-    print(f"⚠️ Could not create session directory: {e}")
+except:
+    pass
 
 # Initialize session extension
 Session(app)
@@ -196,9 +186,7 @@ def init_db():
     """Initialize database with tables and default data - thread-safe for multiple workers"""
     global db_initialized
     
-    # Use lock to prevent multiple workers from initializing simultaneously
     with db_init_lock:
-        # Check if already initialized by another worker
         if db_initialized:
             print("ℹ️ Database already initialized by another worker")
             return
@@ -268,31 +256,24 @@ def init_db():
             
             conn.commit()
             
-            # Only try to create default admin if table is empty
+            # Create default admin if none exists
             c.execute("SELECT COUNT(*) as count FROM admins")
             if c.fetchone()['count'] == 0:
                 admin_password = hash_password('admin123')
-                c.execute('''
-                    INSERT OR IGNORE INTO admins (username, password, name, role, created_at)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', ('admin', admin_password, 'System Administrator', 'admin', datetime.now().isoformat()))
-                conn.commit()
-                print("✅ Default admin created")
+                try:
+                    c.execute('''
+                        INSERT INTO admins (username, password, name, role, created_at)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', ('admin', admin_password, 'System Administrator', 'admin', datetime.now().isoformat()))
+                    conn.commit()
+                    print("✅ Default admin created")
+                except sqlite3.IntegrityError:
+                    print("ℹ️ Admin already exists (race condition)")
             else:
                 print("ℹ️ Admin account already exists, skipping creation")
 
-            # Log counts of teachers and students
-            c.execute("SELECT COUNT(*) as count FROM teachers")
-            teacher_count = c.fetchone()['count']
-            print(f"👥 Teachers in database: {teacher_count}")
-            
-            c.execute("SELECT COUNT(*) as count FROM students")
-            student_count = c.fetchone()['count']
-            print(f"👥 Students in database: {student_count}")
-
             print("✅ Database initialized successfully")
             
-            # Set proper permissions on database file
             if os.path.exists(DB_PATH):
                 try:
                     os.chmod(DB_PATH, 0o666)
@@ -302,7 +283,6 @@ def init_db():
             db_size = os.path.getsize(DB_PATH) if os.path.exists(DB_PATH) else 0
             print(f"📊 Database size: {db_size} bytes")
             
-            # Mark as initialized
             db_initialized = True
 
         except Exception as e:
@@ -320,14 +300,8 @@ def before_request():
     """Setup before each request"""
     if not request.path.startswith('/static/'):
         print(f"📥 {request.method} {request.path}")
-        print(f"   Headers: Origin={request.headers.get('Origin')}, Cookie={request.headers.get('Cookie')}")
     
-    # Set session to be permanent
     session.permanent = True
-    
-    # Log session contents for debugging
-    if 'user_id' in session:
-        print(f"🔍 Session before request: {dict(session)}")
 
 @app.after_request
 def after_request(response):
@@ -340,12 +314,6 @@ def after_request(response):
 
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
     response.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS'
-
-    # Log session after request
-    if 'user_id' in session:
-        print(f"📤 Response {response.status_code}")
-        print(f"   Session after request: {dict(session)}")
-        print(f"   Cookies set: {response.headers.get('Set-Cookie')}")
 
     return response
 
@@ -375,7 +343,11 @@ def login_required(role=None):
 # --------------------------
 @app.route('/')
 def index():
-    return render_template("index.html")
+    try:
+        return render_template("index.html")
+    except Exception as e:
+        print(f"Error rendering index: {e}")
+        return "Welcome to Davis Academy Portal", 200
 
 @app.route('/login')
 def login_page():
@@ -523,7 +495,6 @@ def login():
             print(f"❌ Login failed for {role}: {username}")
             return jsonify({'error': 'Invalid credentials'}), 401
 
-        # Clear old session and set new one
         session.clear()
         session.permanent = True
         session['role'] = role
@@ -541,7 +512,6 @@ def login():
         session.modified = True
 
         print(f"✅ LOGIN SUCCESS - {role}: {username}")
-        print(f"✅ SESSION DATA: {dict(session)}")
 
         redirect_url = {
             "admin": "/admin_dashboard",
@@ -549,23 +519,19 @@ def login():
             "student": "/student_dashboard"
         }.get(role, "/")
 
-        if "password" in user:
-            del user["password"]
-
         response = jsonify({
             "success": True,
             "redirect": redirect_url,
-            "user": user
+            "user": {k: v for k, v in user.items() if k != 'password'}
         })
         
-        # Ensure cookie is set
         response.set_cookie(
-            'school_session',
+            app.config['SESSION_COOKIE_NAME'],
             session.get('_id', ''),
             httponly=True,
             secure=ON_FLY,
             samesite='Lax',
-            max_age=86400  # 24 hours
+            max_age=timedelta(hours=24).total_seconds()
         )
         
         return response
@@ -592,7 +558,7 @@ def logout():
 
     session.clear()
     response = jsonify({'success': True})
-    response.set_cookie('school_session', '', expires=0)
+    response.set_cookie(app.config['SESSION_COOKIE_NAME'], '', expires=0, path='/')
     return response
 
 # --------------------------
@@ -931,10 +897,440 @@ def change_password():
         return jsonify({'error': 'Failed to change password'}), 500
 
 # --------------------------
+# Admin API Routes
+# --------------------------
+@app.route('/api/teachers', methods=['GET', 'OPTIONS'])
+@login_required(role='admin')
+def get_teachers():
+    """Get all teachers - for admin dashboard"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        origin = request.headers.get('Origin', '*')
+        if origin in ALLOWED_ORIGINS:
+            response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
+        response.headers['Access-Control-Allow-Methods'] = 'GET,OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
+
+    try:
+        def _get_teachers(conn):
+            c = conn.cursor()
+            c.execute("SELECT username, name, email, subject, phone, created_at FROM teachers ORDER BY name")
+            rows = c.fetchall()
+            return [{k: row[k] for k in row.keys()} for row in rows]
+
+        teachers = safe_db_operation(_get_teachers)
+        return jsonify(teachers)
+    except Exception as e:
+        print(f"Error fetching teachers: {e}")
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to load teachers'}), 500
+
+@app.route('/api/teachers', methods=['POST', 'OPTIONS'])
+@login_required(role='admin')
+def create_teacher():
+    """Create a new teacher and return credentials"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        origin = request.headers.get('Origin', '*')
+        if origin in ALLOWED_ORIGINS:
+            response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
+        response.headers['Access-Control-Allow-Methods'] = 'POST,OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
+
+    try:
+        data = request.get_json()
+        
+        # Check for both 'name' and 'fullname' fields
+        name = (data.get('name') or data.get('fullname') or '').strip()
+        # username is optional in the request — generate if missing
+        username_provided = (data.get('username') or '').strip()
+        email = data.get('email')
+        subject = data.get('subject')
+        phone = data.get('phone')
+        
+        # Validate required fields (username optional)
+        if not name:
+            return jsonify({'error': 'Missing required field: name or fullname'}), 400
+        if not email:
+            return jsonify({'error': 'Missing required field: email'}), 400
+        if not subject:
+            return jsonify({'error': 'Missing required field: subject'}), 400
+        if not phone:
+            return jsonify({'error': 'Missing required field: phone'}), 400
+
+        # Generate random password
+        temp_password = generate_random_password()
+        hashed_password = hash_password(temp_password)
+
+        def _create_teacher(conn):
+            c = conn.cursor()
+            now = datetime.now().isoformat()
+
+            # Decide username: prefer provided, else generate from name.
+            if username_provided:
+                candidate = username_provided
+            else:
+                base = name.lower().replace(' ', '_')
+                candidate = f"{base}_{secrets.token_hex(2)}"
+
+            # Try insert and handle username collisions by retrying a few times
+            attempts = 0
+            while attempts < 6:
+                try:
+                    c.execute("""
+                        INSERT INTO teachers (username, password, name, email, subject, phone, role, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        candidate, hashed_password, name,
+                        email, subject, phone,
+                        'teacher', now
+                    ))
+                    conn.commit()
+                    # Success — return credentials with plain password at top-level for client's convenience
+                    return {
+                        'success': True,
+                        'message': 'Teacher created successfully',
+                        'credentials': {
+                            'username': candidate,
+                            'password': temp_password,
+                            'name': name,
+                            'email': email,
+                            'subject': subject,
+                            'phone': phone
+                        },
+                        'temp_password': temp_password,
+                        'password': temp_password,   # top-level for front-end (client expects result.password)
+                        'username': candidate,
+                        'name': name
+                    }
+                except sqlite3.IntegrityError as e:
+                    err = str(e).lower()
+                    # If student tries to set email that violates unique constraint (not defined), or username collision
+                    if 'username' in err or 'unique' in err:
+                        # regenerate username and retry
+                        candidate = f"{candidate.split('_')[0]}_{secrets.token_hex(2)}"
+                        attempts += 1
+                        continue
+                    # else bubble up specific errors
+                    raise
+
+            # If loop exhausted
+            raise sqlite3.IntegrityError("Could not create unique username after retries")
+
+        result = safe_db_operation(_create_teacher)
+        print(f"✅ Teacher created: {result.get('username')} with password: {result.get('password')}")  # Log for debugging
+        return jsonify(result)
+
+    except sqlite3.IntegrityError as e:
+        err = str(e).lower()
+        if 'username' in err:
+            return jsonify({'error': 'Username already exists'}), 400
+        return jsonify({'error': 'Database integrity error'}), 400
+    except Exception as e:
+        print(f"Error creating teacher: {e}")
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to create teacher'}), 500
+
+@app.route('/api/teachers/<username>', methods=['DELETE', 'OPTIONS'])
+@login_required(role='admin')
+def delete_teacher(username):
+    """Delete a teacher"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        origin = request.headers.get('Origin', '*')
+        if origin in ALLOWED_ORIGINS:
+            response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
+        response.headers['Access-Control-Allow-Methods'] = 'DELETE,OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
+
+    try:
+        def _delete_teacher(conn):
+            c = conn.cursor()
+            c.execute("DELETE FROM teachers WHERE username = ?", (username,))
+            conn.commit()
+            return {'success': True, 'deleted': c.rowcount > 0}
+
+        result = safe_db_operation(_delete_teacher)
+        
+        if not result['deleted']:
+            return jsonify({'error': 'Teacher not found'}), 404
+            
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Error deleting teacher: {e}")
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to delete teacher'}), 500
+
+@app.route('/api/students/manage', methods=['GET', 'OPTIONS'])
+@login_required(role='admin')
+def manage_students():
+    """Get all students for admin management"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        origin = request.headers.get('Origin', '*')
+        if origin in ALLOWED_ORIGINS:
+            response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
+        response.headers['Access-Control-Allow-Methods'] = 'GET,OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
+
+    try:
+        def _get_students(conn):
+            c = conn.cursor()
+            c.execute("SELECT student_id, name, level, arm, phone, username, created_at FROM students ORDER BY name")
+            rows = c.fetchall()
+            students_list = []
+            for row in rows:
+                student = {k: row[k] for k in row.keys()}
+                students_list.append(student)
+            return students_list
+
+        students = safe_db_operation(_get_students)
+        return jsonify(students)
+    except Exception as e:
+        print(f"Error fetching students: {e}")
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to load students'}), 500
+
+@app.route('/api/students/manage', methods=['POST', 'OPTIONS'])
+@login_required(role='admin')
+def create_student():
+    """Create a new student and return credentials"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        origin = request.headers.get('Origin', '*')
+        if origin in ALLOWED_ORIGINS:
+            response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
+        response.headers['Access-Control-Allow-Methods'] = 'POST,OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
+
+    try:
+        data = request.get_json()
+        
+        # Check for both 'name' and 'fullname' fields
+        name = (data.get('name') or data.get('fullname') or '').strip()
+        student_id = (data.get('student_id') or '').strip()
+        level = data.get('level')
+        arm = data.get('arm')
+        phone = data.get('phone')
+        # username optional: accept provided username if any
+        username_provided = (data.get('username') or '').strip()
+        
+        # Validate required fields
+        if not name:
+            return jsonify({'error': 'Missing required field: name or fullname'}), 400
+        if not student_id:
+            return jsonify({'error': 'Missing required field: student_id'}), 400
+        if not level:
+            return jsonify({'error': 'Missing required field: level'}), 400
+        if not arm:
+            return jsonify({'error': 'Missing required field: arm'}), 400
+        if not phone:
+            return jsonify({'error': 'Missing required field: phone'}), 400
+
+        # Decide username: prefer provided, else generate from name + short token
+        if username_provided:
+            candidate_username = username_provided
+        else:
+            base_username = name.lower().replace(' ', '_')
+            candidate_username = f"{base_username}_{secrets.token_hex(2)}"
+        
+        # Generate random password
+        temp_password = generate_random_password()
+        hashed_password = hash_password(temp_password)
+
+        def _create_student(conn):
+            # allow inner function to update the outer candidate_username variable
+            nonlocal candidate_username
+
+            c = conn.cursor()
+            now = datetime.now().isoformat()
+
+            attempts = 0
+            while attempts < 6:
+                try:
+                    c.execute("""
+                        INSERT INTO students (username, password, name, student_id, level, arm, phone, role, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        candidate_username, hashed_password, name,
+                        student_id, level, arm,
+                        phone, 'student', now
+                    ))
+                    conn.commit()
+                    return {
+                        'success': True,
+                        'message': 'Student created successfully',
+                        'credentials': {
+                            'username': candidate_username,
+                            'password': temp_password,
+                            'name': name,
+                            'student_id': student_id,
+                            'level': level,
+                            'arm': arm,
+                            'phone': phone
+                        },
+                        'temp_password': temp_password,
+                        'password': temp_password,   # Added for frontend compatibility
+                        'username': candidate_username,
+                        'name': name,
+                        'student_id': student_id,
+                        'level': level,
+                        'arm': arm,
+                        'phone': phone
+                    }
+                except sqlite3.IntegrityError as e:
+                    err = str(e).lower()
+                    # If student_id unique conflict, bubble up so client sees the proper message
+                    if 'student_id' in err:
+                        raise
+                    # If username conflict, regenerate and retry
+                    if 'username' in err or 'unique' in err:
+                        # modify candidate and retry
+                        candidate_username = f"{candidate_username.split('_')[0]}_{secrets.token_hex(2)}"
+                        attempts += 1
+                        continue
+                    raise
+
+            raise sqlite3.IntegrityError("Could not create unique username after retries")
+
+        result = safe_db_operation(_create_student)
+        print(f"✅ Student created: {result.get('username')} with password: {result.get('password')}")  # Log for debugging
+        return jsonify(result)
+
+    except sqlite3.IntegrityError as e:
+        err = str(e).lower()
+        if 'student_id' in err:
+            return jsonify({'error': 'Student ID already exists'}), 400
+        if 'username' in err:
+            return jsonify({'error': 'Username already exists'}), 400
+        return jsonify({'error': 'Database integrity error'}), 400
+    except Exception as e:
+        print(f"Error creating student: {e}")
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to create student'}), 500
+
+@app.route('/api/students/manage/<student_id>', methods=['DELETE', 'OPTIONS'])
+@login_required(role='admin')
+def delete_student(student_id):
+    """Delete a student"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        origin = request.headers.get('Origin', '*')
+        if origin in ALLOWED_ORIGINS:
+            response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
+        response.headers['Access-Control-Allow-Methods'] = 'DELETE,OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
+
+    try:
+        def _delete_student(conn):
+            c = conn.cursor()
+            # First delete any scores associated with the student
+            c.execute("DELETE FROM scores WHERE student_id = ?", (student_id,))
+            # Then delete the student
+            c.execute("DELETE FROM students WHERE student_id = ?", (student_id,))
+            conn.commit()
+            return {'success': True, 'deleted': c.rowcount > 0}
+
+        result = safe_db_operation(_delete_student)
+        
+        if not result['deleted']:
+            return jsonify({'error': 'Student not found'}), 404
+            
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Error deleting student: {e}")
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to delete student'}), 500
+
+@app.route('/api/students/manage/<student_id>/password', methods=['GET', 'OPTIONS'])
+@login_required(role='admin')
+def get_student_password(student_id):
+    """Get student password hash (admin only)"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        origin = request.headers.get('Origin', '*')
+        if origin in ALLOWED_ORIGINS:
+            response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
+        response.headers['Access-Control-Allow-Methods'] = 'GET,OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
+
+    try:
+        def _get_password(conn):
+            c = conn.cursor()
+            c.execute("SELECT password FROM students WHERE student_id = ?", (student_id,))
+            row = c.fetchone()
+            if row:
+                return {'password_hash': row['password']}
+            return None
+
+        result = safe_db_operation(_get_password)
+        
+        if not result:
+            return jsonify({'error': 'Student not found'}), 404
+            
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Error fetching student password: {e}")
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to fetch student password'}), 500
+
+@app.route('/api/scores/manage', methods=['GET', 'OPTIONS'])
+@login_required(role='admin')
+def manage_scores():
+    """Get all scores for admin management"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        origin = request.headers.get('Origin', '*')
+        if origin in ALLOWED_ORIGINS:
+            response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
+        response.headers['Access-Control-Allow-Methods'] = 'GET,OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
+
+    try:
+        def _get_scores(conn):
+            c = conn.cursor()
+            c.execute("""
+                SELECT s.student_id, s.name, s.level, s.arm,
+                       sc.term, sc.session, sc.subject, sc.ca1, sc.ca2, sc.ca3, sc.exam, sc.total, sc.grade
+                FROM scores sc
+                JOIN students s ON sc.student_id = s.student_id
+                ORDER BY s.name, sc.term, sc.session, sc.subject
+            """)
+            rows = c.fetchall()
+            return [{k: row[k] for k in row.keys()} for row in rows]
+
+        scores = safe_db_operation(_get_scores)
+        return jsonify(scores)
+    except Exception as e:
+        print(f"Error fetching scores: {e}")
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to load scores'}), 500
+
+# --------------------------
 # Health check
 # --------------------------
 @app.route('/health', methods=['GET'])
 def health_check():
+    """Health check endpoint - required for Fly.io"""
     try:
         def _check_db(conn):
             conn.execute("SELECT 1").fetchone()
@@ -962,7 +1358,10 @@ def health_check():
 def not_found_error(error):
     if request.path.startswith('/api/'):
         return jsonify({'error': 'API endpoint not found'}), 404
-    return render_template('index.html'), 404
+    try:
+        return render_template('index.html'), 404
+    except:
+        return "Page not found", 404
 
 @app.errorhandler(500)
 def internal_error(error):
@@ -970,7 +1369,10 @@ def internal_error(error):
     traceback.print_exc()
     if request.path.startswith('/api/'):
         return jsonify({'error': 'Internal server error'}), 500
-    return render_template('index.html'), 500
+    try:
+        return render_template('index.html'), 500
+    except:
+        return "Internal server error", 500
 
 # --------------------------
 # Initialize database (with worker safety)

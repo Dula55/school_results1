@@ -39,6 +39,6 @@ primary_region = "iad"  # Change to your preferred region
 
 # Optional: Add a volume for persistent storage
 # Create volume first with: fly volumes create data --size 1
-[[mounts]]
-  source = "data"
-  destination = "/data"
+[mounts]
+source="data"
+destination="/data"

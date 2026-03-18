@@ -635,7 +635,7 @@
                     </div>
                     <div class="form-group">
                         <label>Arm</label>
-                        <select id="studentArm">
+                        <select id="studentArm" required>
                             <option value="">Select Arm</option>
                             <option>A</option>
                             <option>B</option>
@@ -649,7 +649,7 @@
                 </div>
                 <div class="form-group">
                     <label>Username (optional)</label>
-                    <input type="text" id="studentUsername" placeholder="Leave blank to use Student ID">
+                    <input type="text" id="studentUsername" placeholder="Leave blank to generate automatically">
                 </div>
                 <button type="submit" class="btn btn-primary btn-full">Enroll Student</button>
             </form>
@@ -822,12 +822,7 @@
 <div id="toast"></div>
 
 <script>
-// FIX: Use a relative path instead of an absolute hardcoded URL.
-// The original code used 'http://localhost:5000/api', but the page is served
-// from http://127.0.0.1:5000. The browser treats these as different origins,
-// so it never sent the session cookie — causing Cookie=None on every
-// /api/current-user request and triggering an infinite 401 → /login loop.
-// A relative path is always same-origin, so the cookie is always included.
+// API base URL - using relative path for same-origin requests
 const API_BASE = '/api';
 
 async function apiCall(endpoint, options = {}) {
@@ -839,7 +834,6 @@ async function apiCall(endpoint, options = {}) {
         }
     };
 
-    // Merge headers carefully so callers can add headers without stomping defaults
     const mergedOptions = {
         ...defaultOptions,
         ...options,
@@ -852,14 +846,12 @@ async function apiCall(endpoint, options = {}) {
     try {
         const response = await fetch(url, mergedOptions);
 
-        // Handle 401 Unauthorized — session expired or not logged in
         if (response.status === 401) {
             console.log('Session expired, redirecting to login');
             window.location.href = '/';
             throw new Error('Session expired');
         }
 
-        // For empty responses (like 204 No Content)
         if (response.status === 204) {
             return null;
         }
@@ -882,7 +874,6 @@ let currentUser = null;
 document.addEventListener('DOMContentLoaded', () => {
     initDashboard();
 
-    // Close sidebar when resizing to large screens
     window.addEventListener('resize', () => {
         if (window.innerWidth > 768) {
             document.getElementById('sidebarNav').classList.remove('open');
@@ -890,7 +881,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Handle mobile logout button visibility
     handleMobileLayout();
 });
 
@@ -903,7 +893,6 @@ function handleMobileLayout() {
     }
 }
 
-// Listen for window resize to update mobile layout
 window.addEventListener('resize', handleMobileLayout);
 
 async function initDashboard() {
@@ -917,33 +906,27 @@ async function initDashboard() {
 
         currentUser = data.user;
 
-        // Verify admin role
         if (!currentUser.role || currentUser.role.toLowerCase() !== 'admin') {
             window.location.href = '/';
             return;
         }
 
-        // Populate UI
         document.getElementById('topName').textContent = currentUser.name || currentUser.username;
         document.getElementById('topAvatar').textContent = (currentUser.name || currentUser.username).charAt(0).toUpperCase();
         document.getElementById('topRole').textContent = 'Admin';
 
-        // Load dashboard stats
         loadDashboardStats();
 
     } catch (err) {
         console.error('Dashboard init error:', err);
-        // Only redirect if it's not already a redirect (avoid double redirect)
         if (!err.message.includes('Session expired')) {
             window.location.href = '/';
         }
     }
 }
 
-// Enhanced logout function with confirmation
 function doLogout() {
     if (confirm('Are you sure you want to sign out?')) {
-        // Show loading state on button
         const logoutBtn = document.querySelector('.btn-logout');
         const originalText = logoutBtn.innerHTML;
         logoutBtn.innerHTML = '<span class="logout-icon">⏳</span><span class="logout-text">Signing out...</span>';
@@ -954,11 +937,9 @@ function doLogout() {
                 window.location.href = '/'; 
             })
             .catch(() => { 
-                // Even if API fails, redirect to login
                 window.location.href = '/'; 
             })
             .finally(() => {
-                // Reset button state if redirect doesn't happen immediately
                 logoutBtn.innerHTML = originalText;
                 logoutBtn.disabled = false;
             });
@@ -973,7 +954,6 @@ function showSection(name, btn) {
     document.querySelectorAll('#sidebarNav .nav-item').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
 
-    // close mobile sidebar after navigation
     if (window.innerWidth <= 768) closeMobileNav();
 }
 
@@ -1051,9 +1031,11 @@ function filterStudents() {
 function openAddStudentModal() {
     document.getElementById('addStudentForm').reset();
     document.getElementById('studentPasswordDisplay').style.display = 'none';
+    document.getElementById('addStudentForm').style.display = 'block';
     openModal('addStudentModal');
 }
 
+/* FIXED: Enhanced addStudent function with better password handling */
 async function addStudent() {
     const name = document.getElementById('studentName').value.trim();
     const studentId = document.getElementById('studentId').value.trim();
@@ -1062,19 +1044,28 @@ async function addStudent() {
     const phone = document.getElementById('studentPhone').value.trim();
     const username = document.getElementById('studentUsername').value.trim() || studentId;
 
-    if (!name || !studentId || !level) {
-        toast('Please fill all required fields', 'error');
+    if (!name || !studentId || !level || !arm) {
+        toast('Please fill all required fields (Name, Student ID, Class, Arm)', 'error');
         return;
     }
 
     try {
         const result = await apiCall('/students/manage', {
             method: 'POST',
-            body: JSON.stringify({ name, student_id: studentId, level, arm, phone, username })
+            body: JSON.stringify({ 
+                name, 
+                student_id: studentId, 
+                level, 
+                arm, 
+                phone, 
+                username 
+            })
         });
 
         if (result.success) {
-            document.getElementById('generatedPassword').textContent = result.password;
+            // Use result.password (added for compatibility) or result.temp_password
+            const password = result.password || result.temp_password;
+            document.getElementById('generatedPassword').textContent = password;
             document.getElementById('studentPasswordDisplay').style.display = 'block';
             document.getElementById('addStudentForm').style.display = 'none';
 
@@ -1107,17 +1098,23 @@ async function deleteStudent(studentId) {
     }
 }
 
+/* FIXED: Enhanced viewStudentScores function with better data handling */
 async function viewStudentScores(studentId) {
     try {
-        const scores = await apiCall(`/scores/manage?student_id=${studentId}`);
+        // Fetch all scores
+        const scores = await apiCall('/scores/manage');
+        
+        // Filter scores for this student
+        const studentScores = scores.filter(s => s.student_id === studentId);
 
         document.getElementById('viewScoresSubtitle').textContent = `Student ID: ${studentId}`;
 
-        if (!scores || scores.length === 0) {
+        if (!studentScores || studentScores.length === 0) {
             document.getElementById('viewScoresContent').innerHTML = '<p style="text-align:center;color:var(--gray-400);">No scores found for this student</p>';
         } else {
+            // Group by term and session
             const grouped = {};
-            scores.forEach(s => {
+            studentScores.forEach(s => {
                 const key = `${s.term} - ${s.session}`;
                 if (!grouped[key]) grouped[key] = [];
                 grouped[key].push(s);
@@ -1140,11 +1137,29 @@ async function viewStudentScores(studentId) {
                 });
                 html += '</tbody></table></div>';
             }
+            
+            // Add summary statistics
+            const totalSubjects = studentScores.length;
+            const totalScore = studentScores.reduce((sum, s) => sum + s.total, 0);
+            const average = totalSubjects > 0 ? (totalScore / totalSubjects).toFixed(2) : 0;
+            
+            html += `
+                <div style="margin-top: 20px; padding: 15px; background: var(--gray-100); border-radius: 8px;">
+                    <h4 style="color: var(--navy); margin-bottom: 10px;">Summary</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+                        <div><strong>Total Subjects:</strong> ${totalSubjects}</div>
+                        <div><strong>Total Score:</strong> ${totalScore}</div>
+                        <div><strong>Average:</strong> ${average}</div>
+                    </div>
+                </div>
+            `;
+            
             document.getElementById('viewScoresContent').innerHTML = html;
         }
 
         openModal('viewScoresModal');
     } catch (error) {
+        console.error('View scores error:', error);
         toast('Failed to load scores', 'error');
     }
 }
@@ -1204,9 +1219,11 @@ function filterTeachers() {
 function openAddTeacherModal() {
     document.getElementById('addTeacherForm').reset();
     document.getElementById('teacherPasswordDisplay').style.display = 'none';
+    document.getElementById('addTeacherForm').style.display = 'block';
     openModal('addTeacherModal');
 }
 
+/* FIXED: Enhanced addTeacher function with better password handling */
 async function addTeacher() {
     const name = document.getElementById('teacherName').value.trim();
     const email = document.getElementById('teacherEmail').value.trim();
@@ -1214,7 +1231,7 @@ async function addTeacher() {
     const phone = document.getElementById('teacherPhone').value.trim();
 
     if (!name || !email || !subject) {
-        toast('Please fill all required fields', 'error');
+        toast('Please fill all required fields (Name, Email, Subject)', 'error');
         return;
     }
 
@@ -1225,7 +1242,9 @@ async function addTeacher() {
         });
 
         if (result.success) {
-            document.getElementById('generatedTeacherPassword').textContent = result.password;
+            // Use result.password (added for compatibility) or result.temp_password
+            const password = result.password || result.temp_password;
+            document.getElementById('generatedTeacherPassword').textContent = password;
             document.getElementById('teacherPasswordDisplay').style.display = 'block';
             document.getElementById('addTeacherForm').style.display = 'none';
 
@@ -1383,11 +1402,10 @@ async function deleteScore(studentId, subject, term, session) {
 /* VIEW SINGLE SCORE FUNCTION */
 async function viewSingleScore(studentId, subject, term, session) {
     try {
-        // Fetch all scores for this student
-        const scores = await apiCall(`/scores/manage?student_id=${studentId}`);
+        const scores = await apiCall('/scores/manage');
         
-        // Find the specific score
         const score = scores.find(s => 
+            s.student_id === studentId && 
             s.subject === subject && 
             s.term === term && 
             s.session === session
@@ -1461,7 +1479,6 @@ function exportScoresToExcel() {
     }
 
     try {
-        // Prepare data for Excel
         const excelData = allScores.map(s => ({
             'Student ID': s.student_id,
             'Term': s.term,
@@ -1475,21 +1492,15 @@ function exportScoresToExcel() {
             'Grade': s.grade
         }));
 
-        // Create worksheet
         const ws = XLSX.utils.json_to_sheet(excelData);
-        
-        // Create workbook
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Scores');
         
-        // Generate filename with current date
         const date = new Date();
         const dateStr = `${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')}`;
         const filename = `scores_export_${dateStr}.xlsx`;
         
-        // Save file
         XLSX.writeFile(wb, filename);
-        
         toast('Excel file downloaded successfully!', 'success');
     } catch (error) {
         console.error('Excel export error:', error);
@@ -1559,7 +1570,6 @@ async function doChangePwd() {
     }
 }
 
-// Close modals on overlay click
 document.querySelectorAll('.modal-overlay').forEach(o => {
     o.addEventListener('click', e => { if (e.target === o) o.classList.remove('active'); });
 });
