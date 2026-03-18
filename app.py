@@ -6,6 +6,7 @@ import secrets
 import traceback
 import sys
 import time
+import threading
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -15,6 +16,10 @@ from flask import (
 )
 from flask_cors import CORS
 from flask_session import Session
+
+# Global lock for database initialization
+db_init_lock = threading.Lock()
+db_initialized = False
 
 # --------------------------
 # Basic config / DB helpers
@@ -30,17 +35,13 @@ ON_FLY = os.environ.get('FLY_APP_NAME') is not None
 # Database path configuration
 if ON_FLY:
     # On Fly.io, we can use the volume mount if configured
-    # You need to create a volume first: fly volumes create data --size 1
-    PERSISTENT_DIR = '/data'  # This matches the volume mount in fly.toml
+    PERSISTENT_DIR = '/data'
     if os.path.exists(PERSISTENT_DIR):
         DB_PATH = os.path.join(PERSISTENT_DIR, 'davis_academy.db')
         print(f"✅ Using persistent volume at {PERSISTENT_DIR}")
     else:
-        # Fallback to /tmp but warn
         DB_PATH = '/tmp/davis_academy.db'
         print("⚠️ WARNING: No volume mounted! Data will NOT persist!")
-        print("⚠️ Create a volume with: fly volumes create data --size 1")
-        print("⚠️ Then update fly.toml to mount it at /data")
 else:
     DB_PATH = os.path.join(BASE_DIR, 'davis_academy.db')
 
@@ -104,7 +105,6 @@ def hash_password(password):
     """Hash password with SHA256 - trim whitespace and handle None"""
     if password is None:
         return None
-    # Trim whitespace from password before hashing
     return hashlib.sha256(str(password).strip().encode()).hexdigest()
 
 def generate_user_id(prefix):
@@ -134,31 +134,34 @@ app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_PERMANENT'] = True
 app.config['SESSION_USE_SIGNER'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SECURE'] = ON_FLY  # Only secure on Fly.io
+app.config['SESSION_COOKIE_SECURE'] = ON_FLY
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_NAME'] = 'school_session'
 app.config['SESSION_REFRESH_EACH_REQUEST'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
 
-# Session storage path
+# Fix: Correct session storage path for Fly.io
 if ON_FLY:
-    # Try to use volume for sessions if available
+    # Check if we have a volume mounted
     VOLUME_PATH = '/data'
     if os.path.exists(VOLUME_PATH):
+        # Use the volume for sessions
         app.config['SESSION_FILE_DIR'] = os.path.join(VOLUME_PATH, 'flask_session')
+        print(f"✅ Using volume for sessions at {app.config['SESSION_FILE_DIR']}")
     else:
+        # Fallback to /tmp but warn
         app.config['SESSION_FILE_DIR'] = '/tmp/flask_session'
-        print("⚠️ WARNING: Using /tmp for session data - sessions will NOT persist between restarts!")
+        print("⚠️ WARNING: Using /tmp for sessions - sessions will NOT persist between restarts!")
 else:
     app.config['SESSION_FILE_DIR'] = os.path.join(BASE_DIR, 'flask_session')
 
-# Create session directory
-os.makedirs(app.config['SESSION_FILE_DIR'], exist_ok=True)
-# Ensure the directory is writable
+# Create session directory with proper permissions
 try:
+    os.makedirs(app.config['SESSION_FILE_DIR'], exist_ok=True)
     os.chmod(app.config['SESSION_FILE_DIR'], 0o777)
-except:
-    pass
+    print(f"📁 Session directory created/verified at {app.config['SESSION_FILE_DIR']}")
+except Exception as e:
+    print(f"⚠️ Could not create session directory: {e}")
 
 # Initialize session extension
 Session(app)
@@ -174,7 +177,6 @@ ALLOWED_ORIGINS = [
 ]
 
 if ON_FLY:
-    # Add Fly.io app URL
     fly_app_url = f"https://{os.environ.get('FLY_APP_NAME')}.fly.dev"
     ALLOWED_ORIGINS.append(fly_app_url)
     ALLOWED_ORIGINS.append(fly_app_url.replace('https://', 'http://'))
@@ -188,107 +190,127 @@ CORS(app,
      expose_headers=['Content-Type', 'Authorization'])
 
 # --------------------------
-# Database initialization
+# Database initialization with worker safety
 # --------------------------
 def init_db():
-    """Initialize database with tables and default data"""
-    conn = None
-    try:
-        db_exists = os.path.exists(DB_PATH)
-        if db_exists:
-            print(f"📁 Using existing database at {DB_PATH}")
-        else:
-            print(f"📁 Creating new database at {DB_PATH}")
+    """Initialize database with tables and default data - thread-safe for multiple workers"""
+    global db_initialized
+    
+    # Use lock to prevent multiple workers from initializing simultaneously
+    with db_init_lock:
+        # Check if already initialized by another worker
+        if db_initialized:
+            print("ℹ️ Database already initialized by another worker")
+            return
+            
+        conn = None
+        try:
+            db_exists = os.path.exists(DB_PATH)
+            if db_exists:
+                print(f"📁 Using existing database at {DB_PATH}")
+            else:
+                print(f"📁 Creating new database at {DB_PATH}")
 
-        conn = get_db()
-        c = conn.cursor()
+            conn = get_db()
+            c = conn.cursor()
 
-        # Create tables
-        c.execute('''CREATE TABLE IF NOT EXISTS admins (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            name TEXT,
-            role TEXT DEFAULT 'admin',
-            created_at TEXT
-        )''')
+            # Create tables if they don't exist
+            c.execute('''CREATE TABLE IF NOT EXISTS admins (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                name TEXT,
+                role TEXT DEFAULT 'admin',
+                created_at TEXT
+            )''')
 
-        c.execute('''CREATE TABLE IF NOT EXISTS teachers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            name TEXT,
-            email TEXT,
-            subject TEXT,
-            phone TEXT,
-            role TEXT DEFAULT 'teacher',
-            created_at TEXT
-        )''')
+            c.execute('''CREATE TABLE IF NOT EXISTS teachers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                name TEXT,
+                email TEXT,
+                subject TEXT,
+                phone TEXT,
+                role TEXT DEFAULT 'teacher',
+                created_at TEXT
+            )''')
 
-        c.execute('''CREATE TABLE IF NOT EXISTS students (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            name TEXT,
-            student_id TEXT UNIQUE,
-            level TEXT,
-            arm TEXT,
-            phone TEXT,
-            role TEXT DEFAULT 'student',
-            created_at TEXT
-        )''')
+            c.execute('''CREATE TABLE IF NOT EXISTS students (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                name TEXT,
+                student_id TEXT UNIQUE,
+                level TEXT,
+                arm TEXT,
+                phone TEXT,
+                role TEXT DEFAULT 'student',
+                created_at TEXT
+            )''')
 
-        c.execute('''CREATE TABLE IF NOT EXISTS scores (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            student_id TEXT,
-            term TEXT,
-            session TEXT,
-            subject TEXT,
-            ca1 INTEGER DEFAULT 0,
-            ca2 INTEGER DEFAULT 0,
-            ca3 INTEGER DEFAULT 0,
-            exam INTEGER DEFAULT 0,
-            total INTEGER DEFAULT 0,
-            grade TEXT,
-            created_at TEXT,
-            updated_at TEXT,
-            UNIQUE(student_id, term, session, subject)
-        )''')
+            c.execute('''CREATE TABLE IF NOT EXISTS scores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id TEXT,
+                term TEXT,
+                session TEXT,
+                subject TEXT,
+                ca1 INTEGER DEFAULT 0,
+                ca2 INTEGER DEFAULT 0,
+                ca3 INTEGER DEFAULT 0,
+                exam INTEGER DEFAULT 0,
+                total INTEGER DEFAULT 0,
+                grade TEXT,
+                created_at TEXT,
+                updated_at TEXT,
+                UNIQUE(student_id, term, session, subject)
+            )''')
+            
+            conn.commit()
+            
+            # Only try to create default admin if table is empty
+            c.execute("SELECT COUNT(*) as count FROM admins")
+            if c.fetchone()['count'] == 0:
+                admin_password = hash_password('admin123')
+                c.execute('''
+                    INSERT OR IGNORE INTO admins (username, password, name, role, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', ('admin', admin_password, 'System Administrator', 'admin', datetime.now().isoformat()))
+                conn.commit()
+                print("✅ Default admin created")
+            else:
+                print("ℹ️ Admin account already exists, skipping creation")
 
-        now = datetime.now().isoformat()
+            # Log counts of teachers and students
+            c.execute("SELECT COUNT(*) as count FROM teachers")
+            teacher_count = c.fetchone()['count']
+            print(f"👥 Teachers in database: {teacher_count}")
+            
+            c.execute("SELECT COUNT(*) as count FROM students")
+            student_count = c.fetchone()['count']
+            print(f"👥 Students in database: {student_count}")
 
-        # Check and create default admin if none exists
-        c.execute("SELECT COUNT(*) as count FROM admins")
-        if c.fetchone()['count'] == 0:
-            admin_password = hash_password('admin123')
-            c.execute('''
-                INSERT INTO admins (username, password, name, role, created_at)
-                VALUES (?, ?, ?, ?, ?)
-            ''', ('admin', admin_password, 'System Administrator', 'admin', now))
-            print("✅ Default admin created")
-        else:
-            print("ℹ️ Admin account already exists, skipping creation")
+            print("✅ Database initialized successfully")
+            
+            # Set proper permissions on database file
+            if os.path.exists(DB_PATH):
+                try:
+                    os.chmod(DB_PATH, 0o666)
+                except:
+                    pass
 
-        conn.commit()
-        print("✅ Database initialized successfully")
+            db_size = os.path.getsize(DB_PATH) if os.path.exists(DB_PATH) else 0
+            print(f"📊 Database size: {db_size} bytes")
+            
+            # Mark as initialized
+            db_initialized = True
 
-        # Set proper permissions on database file
-        if os.path.exists(DB_PATH):
-            try:
-                os.chmod(DB_PATH, 0o666)
-            except:
-                pass
-
-        # Log database location and size
-        db_size = os.path.getsize(DB_PATH) if os.path.exists(DB_PATH) else 0
-        print(f"📊 Database size: {db_size} bytes")
-
-    except Exception as e:
-        print(f"❌ Database initialization error: {e}")
-        traceback.print_exc()
-    finally:
-        if conn:
-            conn.close()
+        except Exception as e:
+            print(f"❌ Database initialization error: {e}")
+            traceback.print_exc()
+        finally:
+            if conn:
+                conn.close()
 
 # --------------------------
 # Session and CORS handling
@@ -296,26 +318,34 @@ def init_db():
 @app.before_request
 def before_request():
     """Setup before each request"""
-    # Log the request (optional, can be removed in production)
     if not request.path.startswith('/static/'):
         print(f"📥 {request.method} {request.path}")
-
+        print(f"   Headers: Origin={request.headers.get('Origin')}, Cookie={request.headers.get('Cookie')}")
+    
     # Set session to be permanent
     session.permanent = True
+    
+    # Log session contents for debugging
+    if 'user_id' in session:
+        print(f"🔍 Session before request: {dict(session)}")
 
 @app.after_request
 def after_request(response):
     """Add headers and log after request"""
-    # Add CORS headers for all responses
     origin = request.headers.get('Origin')
     if origin and origin in ALLOWED_ORIGINS:
         response.headers['Access-Control-Allow-Origin'] = origin
         response.headers['Access-Control-Allow-Credentials'] = 'true'
         response.headers['Vary'] = 'Origin'
 
-    # Add headers for all responses
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
     response.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS'
+
+    # Log session after request
+    if 'user_id' in session:
+        print(f"📤 Response {response.status_code}")
+        print(f"   Session after request: {dict(session)}")
+        print(f"   Cookies set: {response.headers.get('Set-Cookie')}")
 
     return response
 
@@ -345,13 +375,10 @@ def login_required(role=None):
 # --------------------------
 @app.route('/')
 def index():
-    """Welcome / login page - accessible to everyone"""
     return render_template("index.html")
 
 @app.route('/login')
 def login_page():
-    """Login page — redirect to index which contains the login UI."""
-    # If the user already has a valid session, send them straight to their dashboard.
     if 'user_id' in session and 'role' in session:
         dest = {
             'admin': 'admin_dashboard',
@@ -382,7 +409,6 @@ def student_dashboard():
 # --------------------------
 @app.route('/api/current-user', methods=['GET', 'OPTIONS'])
 def get_current_user():
-    """Get current user info from session."""
     if request.method == 'OPTIONS':
         response = make_response()
         origin = request.headers.get('Origin', '*')
@@ -403,7 +429,6 @@ def get_current_user():
             }
         }
 
-        # Add role-specific fields
         if session.get('role') == 'student' and session.get('student_id'):
             user_info['user']['student_id'] = session.get('student_id')
             user_info['user']['level'] = session.get('level', '')
@@ -418,7 +443,6 @@ def get_current_user():
 # --------------------------
 @app.route('/api/check-session', methods=['GET', 'OPTIONS'])
 def check_session():
-    """Check if user is logged in"""
     if request.method == 'OPTIONS':
         response = make_response()
         origin = request.headers.get('Origin', '*')
@@ -466,7 +490,6 @@ def login():
         if not role or not username or not password:
             return jsonify({'error': 'Missing credentials'}), 400
 
-        # Trim whitespace
         username = str(username).strip()
         password = str(password).strip()
         
@@ -482,7 +505,6 @@ def login():
                 c.execute("SELECT * FROM teachers WHERE username=? AND password=?",
                           (username, hashed_password))
             elif role == 'student':
-                # Try both username and student_id
                 c.execute(
                     "SELECT * FROM students WHERE (username=? OR student_id=?) AND password=?",
                     (username, username, hashed_password)
@@ -501,7 +523,7 @@ def login():
             print(f"❌ Login failed for {role}: {username}")
             return jsonify({'error': 'Invalid credentials'}), 401
 
-        # Clear and set session
+        # Clear old session and set new one
         session.clear()
         session.permanent = True
         session['role'] = role
@@ -519,6 +541,7 @@ def login():
         session.modified = True
 
         print(f"✅ LOGIN SUCCESS - {role}: {username}")
+        print(f"✅ SESSION DATA: {dict(session)}")
 
         redirect_url = {
             "admin": "/admin_dashboard",
@@ -529,11 +552,23 @@ def login():
         if "password" in user:
             del user["password"]
 
-        return jsonify({
+        response = jsonify({
             "success": True,
             "redirect": redirect_url,
             "user": user
         })
+        
+        # Ensure cookie is set
+        response.set_cookie(
+            'school_session',
+            session.get('_id', ''),
+            httponly=True,
+            secure=ON_FLY,
+            samesite='Lax',
+            max_age=86400  # 24 hours
+        )
+        
+        return response
 
     except Exception as e:
         print("LOGIN ERROR:", e)
@@ -545,7 +580,6 @@ def login():
 # --------------------------
 @app.route('/api/logout', methods=['POST', 'OPTIONS'])
 def logout():
-    """Logout user"""
     if request.method == 'OPTIONS':
         response = make_response()
         origin = request.headers.get('Origin', '*')
@@ -567,7 +601,6 @@ def logout():
 @app.route('/api/students', methods=['GET', 'OPTIONS'])
 @login_required(role='teacher')
 def get_students():
-    """Get all students - for teacher dashboard"""
     if request.method == 'OPTIONS':
         response = make_response()
         origin = request.headers.get('Origin', '*')
@@ -598,7 +631,6 @@ def get_students():
 @app.route('/api/teacher-results', methods=['GET', 'OPTIONS'])
 @login_required(role='teacher')
 def teacher_results():
-    """Get results summary for teacher dashboard"""
     if request.method == 'OPTIONS':
         response = make_response()
         origin = request.headers.get('Origin', '*')
@@ -615,7 +647,6 @@ def teacher_results():
         def _get_teacher_results(conn):
             c = conn.cursor()
             
-            # Get all scores with student info
             query = """
                 SELECT s.student_id, s.name, s.level, s.arm, 
                        sc.term, sc.session, sc.subject, sc.ca1, sc.ca2, sc.ca3, sc.exam, sc.total, sc.grade
@@ -633,7 +664,6 @@ def teacher_results():
             c.execute(query, params)
             rows = c.fetchall()
             
-            # Group by student, term, session
             results = {}
             for row in rows:
                 key = f"{row['student_id']}_{row['term']}_{row['session']}"
@@ -659,7 +689,6 @@ def teacher_results():
                     'grade': row['grade']
                 })
             
-            # Calculate averages
             result_list = []
             for result in results.values():
                 subjects = result['subjects']
@@ -685,7 +714,6 @@ def teacher_results():
 @app.route('/api/scores', methods=['GET', 'OPTIONS'])
 @login_required()
 def get_scores():
-    """Get scores for a student"""
     if request.method == 'OPTIONS':
         response = make_response()
         origin = request.headers.get('Origin', '*')
@@ -704,7 +732,6 @@ def get_scores():
         if not student_id or not term or not session_val:
             return jsonify({'error': 'Missing parameters'}), 400
 
-        # Check authorization - students can only view their own scores
         if session.get('role') == 'student' and session.get('student_id') != student_id:
             return jsonify({'error': 'Unauthorized'}), 403
 
@@ -738,7 +765,6 @@ def get_scores():
 @app.route('/api/scores', methods=['POST', 'OPTIONS'])
 @login_required(role='teacher')
 def create_score():
-    """Create a new score entry"""
     if request.method == 'OPTIONS':
         response = make_response()
         origin = request.headers.get('Origin', '*')
@@ -784,7 +810,6 @@ def create_score():
 @app.route('/api/scores/delete', methods=['POST', 'OPTIONS'])
 @login_required(role='teacher')
 def delete_score():
-    """Delete a score entry"""
     if request.method == 'OPTIONS':
         response = make_response()
         origin = request.headers.get('Origin', '*')
@@ -826,7 +851,6 @@ def delete_score():
 @app.route('/api/change-password', methods=['POST', 'OPTIONS'])
 @login_required()
 def change_password():
-    """Change user password"""
     if request.method == 'OPTIONS':
         response = make_response()
         origin = request.headers.get('Origin', '*')
@@ -857,7 +881,6 @@ def change_password():
         def _change_password(conn):
             c = conn.cursor()
             
-            # Verify old password
             table_map = {
                 'admin': 'admins',
                 'teacher': 'teachers',
@@ -877,10 +900,11 @@ def change_password():
                 c.execute(f"SELECT * FROM {table} WHERE username = ? AND password = ?", 
                          (username, old_hashed))
             
-            if not c.fetchone():
+            user = c.fetchone()
+            if not user:
+                print(f"Password mismatch for {role}: {username}")
                 return {'error': 'Current password is incorrect'}, 401
             
-            # Update password
             new_hashed = hash_password(new_password)
             
             if role == 'student':
@@ -891,11 +915,12 @@ def change_password():
                          (new_hashed, username))
             
             conn.commit()
+            print(f"✅ Password changed successfully for {role}: {username}")
             return {'success': True}
 
         result = safe_db_operation(_change_password)
         
-        if isinstance(result, tuple) and 'error' in result[0]:
+        if isinstance(result, tuple) and len(result) == 2 and 'error' in result[0]:
             return jsonify(result[0]), result[1]
             
         return jsonify(result)
@@ -910,7 +935,6 @@ def change_password():
 # --------------------------
 @app.route('/health', methods=['GET'])
 def health_check():
-    """Health check endpoint - required for Fly.io"""
     try:
         def _check_db(conn):
             conn.execute("SELECT 1").fetchone()
@@ -918,7 +942,6 @@ def health_check():
 
         safe_db_operation(_check_db)
         
-        # Return database info
         db_size = os.path.getsize(DB_PATH) if os.path.exists(DB_PATH) else 0
         return jsonify({
             'status': 'healthy',
@@ -950,7 +973,7 @@ def internal_error(error):
     return render_template('index.html'), 500
 
 # --------------------------
-# Initialize database
+# Initialize database (with worker safety)
 # --------------------------
 print("🚀 Davis Academy Portal Starting...")
 print(f"Python version: {sys.version}")
@@ -958,14 +981,12 @@ print(f"Running on Fly.io: {ON_FLY}")
 print(f"Session directory: {app.config['SESSION_FILE_DIR']}")
 print(f"Database path: {DB_PATH}")
 
-# Check if we're on Fly.io and using persistent storage
 if ON_FLY:
     VOLUME_PATH = '/data'
     if os.path.exists(VOLUME_PATH):
         print(f"✅ Using persistent volume at {VOLUME_PATH}")
-        # Test write permissions
-        test_file = os.path.join(VOLUME_PATH, 'test.txt')
         try:
+            test_file = os.path.join(VOLUME_PATH, 'test.txt')
             with open(test_file, 'w') as f:
                 f.write('test')
             os.remove(test_file)
@@ -974,8 +995,6 @@ if ON_FLY:
             print(f"⚠️ Volume permissions issue: {e}")
     else:
         print("⚠️ WARNING: No volume mounted! Data will NOT persist!")
-        print("⚠️ Create a volume with: fly volumes create data --size 1")
-        print("⚠️ Then update fly.toml to mount it at /data")
 
 # Initialize the database
 init_db()
