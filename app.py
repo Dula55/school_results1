@@ -562,6 +562,350 @@ def logout():
     return response
 
 # --------------------------
+# API - Get all students (for teachers)
+# --------------------------
+@app.route('/api/students', methods=['GET', 'OPTIONS'])
+@login_required(role='teacher')
+def get_students():
+    """Get all students - for teacher dashboard"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        origin = request.headers.get('Origin', '*')
+        if origin in ALLOWED_ORIGINS:
+            response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
+        response.headers['Access-Control-Allow-Methods'] = 'GET,OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
+
+    try:
+        def _get_students(conn):
+            c = conn.cursor()
+            c.execute("SELECT student_id, name, level, arm, username FROM students ORDER BY name")
+            rows = c.fetchall()
+            return [{k: row[k] for k in row.keys()} for row in rows]
+
+        students = safe_db_operation(_get_students)
+        return jsonify(students)
+    except Exception as e:
+        print(f"Error fetching students: {e}")
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to load students'}), 500
+
+# --------------------------
+# API - Teacher results summary
+# --------------------------
+@app.route('/api/teacher-results', methods=['GET', 'OPTIONS'])
+@login_required(role='teacher')
+def teacher_results():
+    """Get results summary for teacher dashboard"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        origin = request.headers.get('Origin', '*')
+        if origin in ALLOWED_ORIGINS:
+            response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
+        response.headers['Access-Control-Allow-Methods'] = 'GET,OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
+
+    try:
+        term_filter = request.args.get('term')
+        
+        def _get_teacher_results(conn):
+            c = conn.cursor()
+            
+            # Get all scores with student info
+            query = """
+                SELECT s.student_id, s.name, s.level, s.arm, 
+                       sc.term, sc.session, sc.subject, sc.ca1, sc.ca2, sc.ca3, sc.exam, sc.total, sc.grade
+                FROM scores sc
+                JOIN students s ON sc.student_id = s.student_id
+            """
+            params = []
+            
+            if term_filter:
+                query += " WHERE sc.term = ?"
+                params.append(term_filter)
+                
+            query += " ORDER BY s.name, sc.term, sc.session"
+            
+            c.execute(query, params)
+            rows = c.fetchall()
+            
+            # Group by student, term, session
+            results = {}
+            for row in rows:
+                key = f"{row['student_id']}_{row['term']}_{row['session']}"
+                
+                if key not in results:
+                    results[key] = {
+                        'student_id': row['student_id'],
+                        'name': row['name'],
+                        'level': row['level'],
+                        'arm': row['arm'],
+                        'term': row['term'],
+                        'session': row['session'],
+                        'subjects': []
+                    }
+                
+                results[key]['subjects'].append({
+                    'subject': row['subject'],
+                    'ca1': row['ca1'],
+                    'ca2': row['ca2'],
+                    'ca3': row['ca3'],
+                    'exam': row['exam'],
+                    'total': row['total'],
+                    'grade': row['grade']
+                })
+            
+            # Calculate averages
+            result_list = []
+            for result in results.values():
+                subjects = result['subjects']
+                if subjects:
+                    total_score = sum(s['total'] for s in subjects)
+                    avg = round(total_score / len(subjects), 2)
+                    result['average'] = avg
+                result_list.append(result)
+            
+            return result_list
+
+        results = safe_db_operation(_get_teacher_results)
+        return jsonify(results)
+        
+    except Exception as e:
+        print(f"Error fetching teacher results: {e}")
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to load results'}), 500
+
+# --------------------------
+# API - Scores CRUD
+# --------------------------
+@app.route('/api/scores', methods=['GET', 'OPTIONS'])
+@login_required()
+def get_scores():
+    """Get scores for a student"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        origin = request.headers.get('Origin', '*')
+        if origin in ALLOWED_ORIGINS:
+            response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
+        response.headers['Access-Control-Allow-Methods'] = 'GET,OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
+
+    try:
+        student_id = request.args.get('student_id')
+        term = request.args.get('term')
+        session_val = request.args.get('session')
+        
+        if not student_id or not term or not session_val:
+            return jsonify({'error': 'Missing parameters'}), 400
+
+        # Check authorization - students can only view their own scores
+        if session.get('role') == 'student' and session.get('student_id') != student_id:
+            return jsonify({'error': 'Unauthorized'}), 403
+
+        def _get_scores(conn):
+            c = conn.cursor()
+            c.execute("""
+                SELECT subject, ca1, ca2, ca3, exam, total, grade
+                FROM scores
+                WHERE student_id = ? AND term = ? AND session = ?
+                ORDER BY subject
+            """, (student_id, term, session_val))
+            
+            rows = c.fetchall()
+            subjects = [{k: row[k] for k in row.keys()} for row in rows]
+            
+            return [{
+                'student_id': student_id,
+                'term': term,
+                'session': session_val,
+                'subjects': subjects
+            }]
+
+        scores = safe_db_operation(_get_scores)
+        return jsonify(scores)
+
+    except Exception as e:
+        print(f"Error fetching scores: {e}")
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to load scores'}), 500
+
+@app.route('/api/scores', methods=['POST', 'OPTIONS'])
+@login_required(role='teacher')
+def create_score():
+    """Create a new score entry"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        origin = request.headers.get('Origin', '*')
+        if origin in ALLOWED_ORIGINS:
+            response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
+        response.headers['Access-Control-Allow-Methods'] = 'POST,OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
+
+    try:
+        data = request.get_json()
+        required = ['student_id', 'term', 'session', 'subject', 'ca1', 'ca2', 'ca3', 'exam', 'total', 'grade']
+        
+        if not all(k in data for k in required):
+            return jsonify({'error': 'Missing required fields'}), 400
+
+        def _create_score(conn):
+            c = conn.cursor()
+            now = datetime.now().isoformat()
+            
+            c.execute("""
+                INSERT OR REPLACE INTO scores 
+                (student_id, term, session, subject, ca1, ca2, ca3, exam, total, grade, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                data['student_id'], data['term'], data['session'], data['subject'],
+                data['ca1'], data['ca2'], data['ca3'], data['exam'],
+                data['total'], data['grade'], now, now
+            ))
+            
+            conn.commit()
+            return {'success': True}
+
+        result = safe_db_operation(_create_score)
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Error creating score: {e}")
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to save score'}), 500
+
+@app.route('/api/scores/delete', methods=['POST', 'OPTIONS'])
+@login_required(role='teacher')
+def delete_score():
+    """Delete a score entry"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        origin = request.headers.get('Origin', '*')
+        if origin in ALLOWED_ORIGINS:
+            response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
+        response.headers['Access-Control-Allow-Methods'] = 'POST,OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
+
+    try:
+        data = request.get_json()
+        required = ['student_id', 'subject', 'term', 'session']
+        
+        if not all(k in data for k in required):
+            return jsonify({'error': 'Missing required fields'}), 400
+
+        def _delete_score(conn):
+            c = conn.cursor()
+            c.execute("""
+                DELETE FROM scores
+                WHERE student_id = ? AND subject = ? AND term = ? AND session = ?
+            """, (data['student_id'], data['subject'], data['term'], data['session']))
+            
+            conn.commit()
+            return {'success': True, 'deleted': c.rowcount > 0}
+
+        result = safe_db_operation(_delete_score)
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Error deleting score: {e}")
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to delete score'}), 500
+
+# --------------------------
+# API - Change password
+# --------------------------
+@app.route('/api/change-password', methods=['POST', 'OPTIONS'])
+@login_required()
+def change_password():
+    """Change user password"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        origin = request.headers.get('Origin', '*')
+        if origin in ALLOWED_ORIGINS:
+            response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
+        response.headers['Access-Control-Allow-Methods'] = 'POST,OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
+
+    try:
+        data = request.get_json()
+        old_password = data.get('old_password')
+        new_password = data.get('new_password')
+        
+        if not old_password or not new_password:
+            return jsonify({'error': 'Missing passwords'}), 400
+            
+        if len(new_password) < 6:
+            return jsonify({'error': 'Password must be at least 6 characters'}), 400
+
+        role = session.get('role')
+        username = session.get('username')
+        
+        if not role or not username:
+            return jsonify({'error': 'Not logged in'}), 401
+
+        def _change_password(conn):
+            c = conn.cursor()
+            
+            # Verify old password
+            table_map = {
+                'admin': 'admins',
+                'teacher': 'teachers',
+                'student': 'students'
+            }
+            
+            table = table_map.get(role)
+            if not table:
+                return {'error': 'Invalid role'}, 400
+            
+            old_hashed = hash_password(old_password)
+            
+            if role == 'student':
+                c.execute(f"SELECT * FROM {table} WHERE student_id = ? AND password = ?", 
+                         (username, old_hashed))
+            else:
+                c.execute(f"SELECT * FROM {table} WHERE username = ? AND password = ?", 
+                         (username, old_hashed))
+            
+            if not c.fetchone():
+                return {'error': 'Current password is incorrect'}, 401
+            
+            # Update password
+            new_hashed = hash_password(new_password)
+            
+            if role == 'student':
+                c.execute(f"UPDATE {table} SET password = ? WHERE student_id = ?", 
+                         (new_hashed, username))
+            else:
+                c.execute(f"UPDATE {table} SET password = ? WHERE username = ?", 
+                         (new_hashed, username))
+            
+            conn.commit()
+            return {'success': True}
+
+        result = safe_db_operation(_change_password)
+        
+        if isinstance(result, tuple) and 'error' in result[0]:
+            return jsonify(result[0]), result[1]
+            
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Error changing password: {e}")
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to change password'}), 500
+
+# --------------------------
 # Health check
 # --------------------------
 @app.route('/health', methods=['GET'])
